@@ -650,7 +650,7 @@ function radioOnce(key, msg, urgent) {
 }
 
 /* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
-const GAMEVER = 6;
+const GAMEVER = 7;
 const RELAY_URL = 'wss://pustosh-production.up.railway.app';
 function relayURL() {
   try { const o = localStorage.getItem('pustosh-relay'); if (o) return o; } catch (e) {}
@@ -789,6 +789,7 @@ function netDrop() {
   if (!NET.role) return;
   const wasReadyPre = NET.ready;
   const wasGuestInRun = NET.role === 'guest' && state === 'play';
+  const wasGuestEnd = NET.role === 'guest' && state === 'over';
   const wasHostInRun = NET.role === 'host' && NET.ready && state === 'play';
   try { netSend(NET.dcR, { t: 'bye' }); } catch (e) {}
   try { if (NET.pc) NET.pc.close(); } catch (e) {}
@@ -802,6 +803,7 @@ function netDrop() {
   $('coopStartB').style.display = 'none';
   if (preGame) coopStatus('связь оборвалась — попробуй ещё раз');
   if (wasHostInRun) announce('СВЯЗЬ ПОТЕРЯНА — ДОБИВАЙ САМ');
+  if (wasGuestEnd) $('coopEndTxt').textContent += ' · напарник вышел в Схрон';
   if (wasGuestInRun) {
     state = 'menu';
     document.body.classList.remove('ingame');
@@ -833,8 +835,9 @@ function buildSnap() {
   const be = enemies.find(e => e.t === 'boss');
   return { t: 's',
     p: [Math.round(player.x), Math.round(player.y), player.fx < -0.05 ? 1 : 0, player.mov ? 1 : 0,
-      Math.round(player.hp), Math.round(player.maxHp)],
-    a: [Math.round(NET.ally.hp), Math.round(NET.ally.maxHp), Math.round((NET.ally.xp || 0) / (NET.ally.xpNext || 100) * 100), NET.ally.lvl || 1],
+      Math.round(player.hp), Math.round(player.maxHp), player.down ? 1 : 0],
+    a: [Math.round(NET.ally.hp), Math.round(NET.ally.maxHp), Math.round((NET.ally.xp || 0) / (NET.ally.xpNext || 100) * 100), NET.ally.lvl || 1, NET.ally.down ? 1 : 0],
+    rv: Math.round(Math.min(1, (NET.revT || 0) / 3) * 100),
     tm: Math.round(time * 10) / 10, kl: kills, sc: Math.round(runScrap),
     lv: player.lvl, xp: Math.round(player.xp / player.xpNext * 100),
     bs: be ? Math.round(be.hp / be.mhp * 100) : -1, pg: NET.ping, en, bu, gm,
@@ -856,6 +859,8 @@ function netApplySnap(s) {
   kills = s.kl; runScrap = s.sc;
   player.lvl = s.a[3] || 1; player.xp = s.a[2] || 0; player.xpNext = 100;
   player.hp = s.a[0]; player.maxHp = s.a[1];
+  player.down = !!s.a[4];
+  NET.revP = s.rv || 0;
   if (s.a[0] < NET.lastHp && state === 'play') {
     player.hurtT = 0.35; shake = Math.min(15, shake + 6);
     try { SFX.hurt(); } catch (e) {}
@@ -864,7 +869,7 @@ function netApplySnap(s) {
   const A = NET.ally;
   if (A) {
     A.tx = s.p[0]; A.ty = s.p[1]; A.flip = !!s.p[2]; A.mov = !!s.p[3];
-    A.hp = s.p[4]; A.maxHp = s.p[5];
+    A.hp = s.p[4]; A.maxHp = s.p[5]; A.down = !!s.p[6];
   }
   NET.ping = s.pg;
   const seen = {};
@@ -932,7 +937,7 @@ function netOnMsg(raw) {
   if (m.t === 'bye') { netDrop(); return; }
   if (NET.role === 'host') {
     if (m.t === 'pk') { applyGuestPick(m); return; }
-    if (m.t === 'i' && NET.ally) {
+    if (m.t === 'i' && NET.ally && !NET.ally.down) {
       NET.ally.x += (m.x - NET.ally.x) * 0.6;
       NET.ally.y += (m.y - NET.ally.y) * 0.6;
       NET.ally.flip = !!m.fx; NET.ally.mov = !!m.mv;
@@ -968,6 +973,7 @@ function netOnMsg(raw) {
   }
 }
 function guestGo() {
+  hide('coopEnd'); hide('over'); hide('victory');
   NET.gEn = {};
   NET.ally = { x: -70, y: 0, r: 13, hp: 100, maxHp: 100, flip: false, mov: false, wt: 0, hurtT: 0 };
   SAVE.sector = 0;
@@ -983,9 +989,8 @@ function guestEnd(win) {
   MUS.setIntensity(0);
   document.body.classList.remove('ingame');
   $('coopEndH').textContent = win ? 'КУПОЛ ПАЛ' : 'РЕЙД ОКОНЧЕН';
-  $('coopEndTxt').textContent = 'выжито ' + fmt(time) + ' · +' + g + ' ⚙ в Схрон';
+  $('coopEndTxt').textContent = 'выжито ' + fmt(time) + ' · +' + g + ' ⚙ в Схрон · жди: напарник может пойти ещё раз';
   show('coopEnd');
-  setTimeout(() => netDrop(), 400);
 }
 /* контекст напарника: подмена статов и арсенала, чтобы весь код оружия работал за него */
 const SWF = ['x', 'y', 'fx', 'fy', 'hp', 'maxHp', 'dmgM', 'cdr', 'luck', 'crit', 'vamp',
@@ -1048,13 +1053,28 @@ function updateHostNet(dt) {
   A.hurtT = Math.max(0, (A.hurtT || 0) - dt);
   if (A.mov) A.wt = (A.wt || 0) + dt;
   if (A.regen) A.hp = Math.min(A.maxHp, A.hp + A.regen * dt);
-  if (A.hp <= 0 && !NET.allyDown) {
-    NET.allyDown = true;
-    announce('НАПАРНИК ПАЛ');
-    gibSprite('player', 0, A.x, A.y, 13, true);
-    gameOver();
-    return;
+  if (A.hp <= 0 && !A.down) {
+    A.down = true;
+    if (player.down) { gameOver(); return; }
+    burst(A.x, A.y, '#d4453a', 12);
+    announce('НАПАРНИК ПАЛ — ВСТАНЬ РЯДОМ И ПОДНИМИ');
   }
+  // подъём: живой стоит вплотную к павшему 3 секунды
+  const dwn = player.down ? player : (A.down ? A : null);
+  const upP = player.down ? (A.down ? null : A) : (A.down ? player : null);
+  if (dwn && upP) {
+    const near = d2(upP.x, upP.y, dwn.x, dwn.y) < 46 * 46;
+    NET.revT = near ? (NET.revT || 0) + dt : Math.max(0, (NET.revT || 0) - dt * 2);
+    if (NET.revT >= 3) {
+      NET.revT = 0;
+      dwn.down = false;
+      dwn.hp = Math.round(dwn.maxHp * 0.5);
+      addRing(dwn.x, dwn.y, 130, '#7fe08a', 0.5, 6);
+      burst(dwn.x, dwn.y, '#7fe08a', 16);
+      announce(dwn === player ? 'ТЫ СНОВА В СТРОЮ' : 'НАПАРНИК В СТРОЮ');
+      SFX.beam();
+    }
+  } else NET.revT = 0;
   NET.sendT -= dt;
   if (NET.sendT <= 0) {
     NET.sendT = 0.05;
@@ -1074,6 +1094,7 @@ function updateGuest(dt) {
   if (keys.KeyA || keys.ArrowLeft) mx -= 1;
   if (keys.KeyD || keys.ArrowRight) mx += 1;
   if (joy.active) { mx += joy.dx / 48; my += joy.dy / 48; }
+  if (player.down) { mx = 0; my = 0; }
   const ml = Math.hypot(mx, my);
   if (ml > 0.05) {
     const s = Math.min(1, ml);
@@ -2478,6 +2499,7 @@ function hitEnemy(e, base, colNorm) {
 
 /* ================= урон игроку / исходы ================= */
 function damagePlayer(d) {
+  if (player.down) return;
   if (state !== 'play' || DEV.god) return;
   d = Math.max(1, d - player.armor);
   player.hp -= d;
@@ -2504,7 +2526,11 @@ function damagePlayer(d) {
       SFX.boom();
     } else {
       player.hp = 0;
-      gameOver();
+      if (NET.ready && NET.role === 'host' && NET.ally && NET.ally.hp > 0 && !NET.ally.down) {
+        player.down = true;
+        burst(player.x, player.y, '#d4453a', 12);
+        announce('ТЫ ПАЛ — НАПАРНИК МОЖЕТ ПОДНЯТЬ');
+      } else gameOver();
     }
   }
 }
@@ -2534,10 +2560,7 @@ function gameOver() {
   $('bossbar').classList.remove('on');
   show('over');
   MUS.setIntensity(0);
-  if (NET.role === 'host' && NET.ready) {
-    netSend(NET.dcR, { t: 'ev', k: 'over' });
-    setTimeout(() => netDrop(), 500);
-  }
+  if (NET.role === 'host' && NET.ready) netSend(NET.dcR, { t: 'ev', k: 'over' });
   SFX.die();
 }
 function victory() {
@@ -2561,10 +2584,7 @@ function victory() {
   $('bossbar').classList.remove('on');
   show('victory');
   MUS.setIntensity(0);
-  if (NET.role === 'host' && NET.ready) {
-    netSend(NET.dcR, { t: 'ev', k: 'win' });
-    setTimeout(() => netDrop(), 500);
-  }
+  if (NET.role === 'host' && NET.ready) netSend(NET.dcR, { t: 'ev', k: 'win' });
   SFX.win();
 }
 
@@ -2883,6 +2903,7 @@ function update(dt) {
   if (keys.KeyA || keys.ArrowLeft) mx -= 1;
   if (keys.KeyD || keys.ArrowRight) mx += 1;
   if (joy.active) { mx += joy.dx / 48; my += joy.dy / 48; }
+  if (player.down) { mx = 0; my = 0; }
   const ml = Math.hypot(mx, my);
   if (ml > 0.05) {
     const s = Math.min(1, ml);
@@ -2909,7 +2930,7 @@ function update(dt) {
   }
 
   spawner(dt);
-  weapons(dt);
+  if (!player.down) weapons(dt);
   if (NET.role === 'host' && NET.ready && NET.ally && NET.ally.hp > 0) withAlly(() => weapons(dt));
 
   // горящие лужи
@@ -2989,8 +3010,9 @@ function update(dt) {
 
   // враги
   for (const e of enemies) {
-    const tp = (NET.ready && NET.role === 'host' && NET.ally && NET.ally.hp > 0 &&
-      d2(NET.ally.x, NET.ally.y, e.x, e.y) < d2(player.x, player.y, e.x, e.y)) ? NET.ally : player;
+    const aliveA = NET.ready && NET.role === 'host' && NET.ally && NET.ally.hp > 0 && !NET.ally.down;
+    const tp = (player.down && aliveA) ? NET.ally
+      : (aliveA && d2(NET.ally.x, NET.ally.y, e.x, e.y) < d2(player.x, player.y, e.x, e.y)) ? NET.ally : player;
     const dx = tp.x - e.x, dy = tp.y - e.y;
     const d = Math.hypot(dx, dy) || 1;
     e.wob += dt * 4;
@@ -3630,24 +3652,47 @@ function draw() {
     ctx.beginPath(); ctx.ellipse(player.x, player.y + 11, 11, 5, 0, 0, TAU); ctx.fill();
     const pfi = player.mov ? Math.floor(player.wt * 5) % 2 : 0;
     const pflip = player.fx < -0.05;
+    if (player.down) { ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(1.35); ctx.translate(-player.x, -player.y); ctx.globalAlpha = 0.7; }
     drawSpr(SPRC.player, pfi, player.x, player.y, player.r, pflip);
+    if (player.down) { ctx.globalAlpha = 1; ctx.restore(); }
     if (player.hurtT > 0 && Math.floor(time * 16) % 2 === 0)
       drawSpr(SPRC.player_f, pfi, player.x, player.y, player.r, pflip, 0.7);
   }
 
   // напарник (кооп)
-  if (NET.ready && NET.ally && NET.ally.hp > 0) {
+  if (NET.ready && NET.ally && (NET.ally.hp > 0 || NET.ally.down)) {
     const A = NET.ally;
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(A.x, A.y + 11, 11, 5, 0, 0, TAU); ctx.fill();
     const afi = A.mov ? Math.floor((A.wt || 0) * 5) % 2 : 0;
+    if (A.down) { ctx.save(); ctx.translate(A.x, A.y); ctx.rotate(-1.35); ctx.translate(-A.x, -A.y); ctx.globalAlpha = 0.7; }
     drawSpr(SPRC.player2, afi, A.x, A.y, 13, !!A.flip);
+    if (A.down) { ctx.globalAlpha = 1; ctx.restore(); }
     if (A.hurtT > 0 && Math.floor(time * 16) % 2 === 0)
       drawSpr(SPRC.player_f, afi, A.x, A.y, 13, !!A.flip, 0.7);
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(A.x - 15, A.y - 27, 30, 4);
     ctx.fillStyle = '#6ec3c9';
     ctx.fillRect(A.x - 15, A.y - 27, 30 * clamp(A.hp / A.maxHp, 0, 1), 4);
+  }
+
+  // подъём павшего: крест и зелёное кольцо прогресса
+  if (NET.ready) {
+    const dwn2 = player.down ? player : (NET.ally && NET.ally.down ? NET.ally : null);
+    if (dwn2) {
+      const fr = NET.role === 'guest' ? (NET.revP || 0) / 100 : Math.min(1, (NET.revT || 0) / 3);
+      ctx.font = '700 14px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#d4453a';
+      ctx.fillText('✚', dwn2.x, dwn2.y - 27 + Math.sin(time * 4) * 2);
+      if (fr > 0.02) {
+        ctx.strokeStyle = '#7fe08a';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(dwn2.x, dwn2.y, 24, -Math.PI / 2, -Math.PI / 2 + fr * TAU);
+        ctx.stroke();
+      }
+    }
   }
 
   // вспышки стволов
@@ -4184,16 +4229,17 @@ function startRun() {
   hide('start'); hide('over'); hide('victory'); hide('brief');
   document.body.classList.add('ingame');
   state = 'play';
+  player.down = false;
+  NET.revT = 0;
   MUS.setSector();
   MUS.setIntensity(1);
   radioSay(rp(SAVE.sector === 1 ? RADIO.start.concat(RADIO.start8) : RADIO.start));
   if (NET.ready) {
     survAt = 1e9;
-    NET.allyDown = false;
     if (NET.role === 'host' && NET.ally) {
       Object.assign(NET.ally, { fx: 1, fy: 0, dmgM: 1, cdr: 1, luck: 0, crit: 0, vamp: 0,
         armor: 0, magnet: player.magnet, xpM: 1, regen: 0, spd: 165,
-        xp: 0, xpNext: player.xpNext, lvl: 1 });
+        xp: 0, xpNext: player.xpNext, lvl: 1, down: false });
       NET.wp2 = {};
       NET.g2lvl = {};
       NET.gp = 0;
@@ -4225,7 +4271,10 @@ function toBase() {
 $('startB').onclick = () => { audioInit(); state = 'brief'; renderBrief(); hide('start'); show('brief'); };
 $('deployB').onclick = () => startRun();
 $('briefBackB').onclick = () => { state = 'menu'; renderMenu(); hide('brief'); show('start'); };
-$('againB').onclick = startRun;
+$('againB').onclick = () => {
+  if (NET.ready && NET.role === 'host') { coopLaunch(); return; }
+  startRun();
+};
 $('coopB').onclick = () => {
   audioInit();
   hide('start'); show('coop');
@@ -4267,14 +4316,18 @@ $('coopShareB').onclick = () => {
     setTimeout(() => { $('coopShareB').textContent = '⇪ ПОДЕЛИТЬСЯ ССЫЛКОЙ'; }, 1800);
   }
 };
-$('coopStartB').onclick = () => {
-  if (NET.verBad) { coopStatus('сначала обоим обновить страницу'); return; }
+function coopLaunch() {
   SAVE.sector = 0;
-  NET.ally = { x: 70, y: 0, r: 13, hp: 100, maxHp: 100, flip: false, mov: false, wt: 0, hurtT: 0 };
+  NET.ally = Object.assign(NET.ally || {}, { x: 70, y: 0, r: 13, hp: 100, maxHp: 100,
+    flip: false, mov: false, wt: 0, hurtT: 0, down: false });
   netSend(NET.dcR, { t: 'go' });
   hide('coop');
   startRun();
   player.x = -70; player.y = 0;
+}
+$('coopStartB').onclick = () => {
+  if (NET.verBad) { coopStatus('сначала обоим обновить страницу'); return; }
+  coopLaunch();
 };
 $('coopEndB').onclick = () => {
   hide('coopEnd');
@@ -4283,8 +4336,8 @@ $('coopEndB').onclick = () => {
   renderMenu();
 };
 
-$('toBaseB').onclick = toBase;
-$('vBaseB').onclick = toBase;
+$('toBaseB').onclick = () => { if (NET.ready) netDrop(); toBase(); };
+$('vBaseB').onclick = () => { if (NET.ready) netDrop(); toBase(); };
 $('resumeB').onclick = togglePause;
 $('giveupB').onclick = () => { hide('paused'); gameOver(); };
 const __de = document.documentElement;
@@ -4333,6 +4386,8 @@ DEV.coopSim = () => {
 };
 DEV.coopPick = m => applyGuestPick(m);
 DEV.coopXp = v => allyGainXP(v);
+DEV.coopHurtAlly = d => { if (NET.ally) NET.ally.hp = Math.max(0, NET.ally.hp - d); };
+DEV.coopMoveAlly = (x, y) => { if (NET.ally) { NET.ally.x = x; NET.ally.y = y; } };
 DEV.guestSim = snap => {
   const ch = { readyState: 'open', send() {} };
   NET.role = 'guest'; NET.ready = true;
@@ -4350,6 +4405,8 @@ DEV.coopInfo = () => ({
   au: !!(NET.wp2.aura && NET.wp2.aura.on),
   hostSg: !!(Wp.sg && Wp.sg.on),
   aLvl: NET.ally && NET.ally.lvl, aHp: NET.ally && Math.round(NET.ally.hp),
+  aDown: !!(NET.ally && NET.ally.down), pDown: !!player.down,
+  rev: Math.round((NET.revT || 0) * 10) / 10, rdy: NET.ready,
   aXp: NET.ally && Math.round(NET.ally.xp), gp: NET.gp, st: state });
 DEV.netApply = s => {
   NET.role = 'guest'; NET.ready = true; NET.gEn = {};
