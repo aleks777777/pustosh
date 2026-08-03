@@ -681,8 +681,19 @@ function roomCode() {
   return s;
 }
 function netMakePC() {
-  const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] });
+  const pc = new RTCPeerConnection({ iceServers: [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+  ] });
   NET.pc = pc;
+  pc.oniceconnectionstatechange = () => {
+    if (NET.ready) return;
+    const st = pc.iceConnectionState;
+    if (st === 'checking') coopStatus('пробиваю путь между вами…');
+    else if (st === 'failed') coopStatus('✗ не пробились. Другая сеть/Wi-Fi без изоляции, или ручной обмен');
+  };
   pc.onconnectionstatechange = () => {
     if (['failed', 'disconnected', 'closed'].indexOf(pc.connectionState) >= 0) netDrop();
   };
@@ -691,7 +702,7 @@ function netMakePC() {
 function netIceDone(pc) {
   return new Promise(res => {
     if (pc.iceGatheringState === 'complete') return res();
-    const t = setTimeout(res, 4000);
+    const t = setTimeout(res, 6500);
     pc.onicegatheringstatechange = () => {
       if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); }
     };
@@ -807,15 +818,18 @@ function netReady() {
 function coopStatus(m) { $('coopStatus').textContent = m; }
 function netDrop() {
   if (!NET.role) return;
+  const wasReadyPre = NET.ready;
   const wasGuestInRun = NET.role === 'guest' && state === 'play';
   const wasHostInRun = NET.role === 'host' && NET.ready && state === 'play';
   try { netSend(NET.dcR, { t: 'bye' }); } catch (e) {}
   try { if (NET.pc) NET.pc.close(); } catch (e) {}
   MQ.stop();
+  const preGame = wasReadyPre === false && state !== 'play';
   NET.role = null; NET.ready = false; NET.pc = NET.dcR = NET.dcU = null;
   NET.ally = null; NET.gEn = {};
   $('coopLvl').style.display = 'none';
   $('coopStartB').style.display = 'none';
+  if (preGame) coopStatus('✗ соединение сорвалось — попробуйте ещё раз или ручной обмен');
   if (wasHostInRun) announce('СВЯЗЬ ПОТЕРЯНА — ДОБИВАЙ САМ');
   if (wasGuestInRun) {
     state = 'menu';
