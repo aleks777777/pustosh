@@ -219,7 +219,7 @@ html,body{overscroll-behavior:none}
     Выходи на вылазку, резчик. Оружие стреляет само — твоё дело выжить и вернуться со скрапом.</p>
     <div class="metaline" id="metaline"></div>
     <button id="startB" class="big">▶ НА ВЫЛАЗКУ</button>
-    <button id="coopB" class="ghost" style="margin-top:10px">⇆ КООП-РЕЙД</button>
+    <button id="coopB" class="ghost" style="margin-top:10px">⇆ ИГРАТЬ ВДВОЁМ</button>
     <div class="btnrow">
       <button id="shopOpenB" class="ghost">⚙ СХРОН</button>
       <button id="codexOpenB" class="ghost icobtn" title="Журнал">✎</button>
@@ -227,7 +227,7 @@ html,body{overscroll-behavior:none}
       <button id="bestiOpenB" class="ghost icobtn" title="Бестиарий">☠</button>
       <button id="fsMenuB" class="ghost icobtn" title="Во весь экран">⛶</button>
     </div>
-    <p class="hint" id="introHint">WASD / стрелки — движение · на телефоне — виртуальный стик<br>
+    <p class="hint" id="introHint">WASD / стрелки — движение · на телефоне — веди пальцем по экрану<br>
     кристаллы — опыт · золотые элиты носят записи смотрителя<br>
     продержись 10 минут — и он придёт · P / Esc — пауза</p>
   </div>
@@ -274,8 +274,8 @@ html,body{overscroll-behavior:none}
 <!-- КООП -->
 <div id="coop" class="ov hidden">
   <div class="panel">
-    <div class="eyebrow">кооп-рейд v6 · релей + p2p-апгрейд, без сервера · сектор 07</div>
-    <h2>КООП</h2>
+    <div class="eyebrow">рейд вдвоём v6 · по коду или ссылке · сектор 07</div>
+    <h2>ИГРА ВДВОЁМ</h2>
     <div id="coopStatus" class="metaline">выбери роль</div>
     <div id="coopPick">
       <button id="coopHostB" class="big">СОЗДАТЬ КОМНАТУ</button>
@@ -296,14 +296,14 @@ html,body{overscroll-behavior:none}
       </details>
     </div>
     <div id="coopJoin" style="display:none">
-      <div class="sech">КОД КОМНАТЫ ХОСТА</div>
+      <div class="sech">КОД КОМНАТЫ НАПАРНИКА</div>
       <input id="coopCodeIn" class="netin" maxlength="6" placeholder="X7K2" autocomplete="off"/>
       <button id="coopGoB" class="big" style="margin-top:10px">ПОДКЛЮЧИТЬСЯ</button>
       <details class="netdet"><summary>ручной обмен — если код не сработал</summary>
-        <div class="sech">1 · ВСТАВЬ ОФФЕР ХОСТА</div>
+        <div class="sech">1 · ВСТАВЬ ПРИГЛАШЕНИЕ НАПАРНИКА</div>
         <textarea id="coopOfferIn" class="nettx"></textarea>
         <button id="coopManOfferB" class="ghost">СОЗДАТЬ ОТВЕТ</button>
-        <div class="sech">2 · СКОПИРУЙ ОТВЕТ И ОТПРАВЬ ХОСТУ</div>
+        <div class="sech">2 · СКОПИРУЙ ОТВЕТ И ОТПРАВЬ НАПАРНИКУ</div>
         <textarea id="coopAnsOut" class="nettx" readonly></textarea>
         <button id="coopCopyAnsB" class="ghost">КОПИРОВАТЬ</button>
       </details>
@@ -312,7 +312,7 @@ html,body{overscroll-behavior:none}
   </div>
 </div>
 <div id="coopLvl" style="display:none;position:fixed;top:30%;left:0;right:0;text-align:center;z-index:30;
-  color:var(--gold);letter-spacing:.3em;font-size:13px;text-shadow:0 0 12px rgba(224,178,58,.5)">ХОСТ ВЫБИРАЕТ УЛУЧШЕНИЕ…</div>
+  color:var(--gold);letter-spacing:.3em;font-size:13px;text-shadow:0 0 12px rgba(224,178,58,.5)">НАПАРНИК ВЫБИРАЕТ УЛУЧШЕНИЕ…</div>
 <div id="coopEnd" class="ov hidden">
   <div class="panel">
     <div class="eyebrow">рейд окончен</div>
@@ -711,9 +711,8 @@ function netMakePC() {
   pc.oniceconnectionstatechange = () => {
     if (NET.ready || NET.ws) return;
     const st = pc.iceConnectionState;
-    if (st === 'checking') coopStatus('пробиваю путь… [' + candStr() + ']');
-    else if (st === 'failed') coopStatus('✗ не пробились [' + candStr() + ']. ' +
-      (NET.cand.relay === 0 ? 'Релей недоступен — попробуйте хот-спот телефона' : 'Попробуйте другую сеть'));
+    if (st === 'checking') coopStatus('соединяю напрямую…');
+    else if (st === 'failed') coopStatus('✗ напрямую не вышло — подключайся по коду комнаты');
   };
   pc.onconnectionstatechange = () => {
     if (['failed', 'disconnected', 'closed'].indexOf(pc.connectionState) < 0) return;
@@ -754,8 +753,8 @@ function migrateP2P() {
   const ws = NET.ws;
   NET.ws = null;
   if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} }
-  if (state === 'play') announce('КАНАЛ: НАПРЯМУЮ P2P');
-  else coopStatus('СВЯЗЬ: НАПРЯМУЮ (p2p) · релей отпущен');
+  if (state === 'play') announce('СВЯЗЬ: НАПРЯМУЮ');
+  else coopStatus('СВЯЗЬ: НАПРЯМУЮ');
 }
 const b64e = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
 const b64d = s => JSON.parse(decodeURIComponent(escape(atob(s.trim()))));
@@ -884,7 +883,7 @@ function netReady() {
   if (NET.role === 'host') {
     coopStatus('СВЯЗЬ УСТАНОВЛЕНА · жми В БОЙ');
     $('coopStartB').style.display = '';
-  } else coopStatus('СВЯЗЬ УСТАНОВЛЕНА · хост запускает рейд…');
+  } else coopStatus('СВЯЗЬ УСТАНОВЛЕНА · напарник запускает рейд…');
 }
 function coopStatus(m) { $('coopStatus').textContent = m; }
 function netDrop() {
@@ -903,11 +902,7 @@ function netDrop() {
   NET.ally = null; NET.gEn = {};
   $('coopLvl').style.display = 'none';
   $('coopStartB').style.display = 'none';
-  if (preGame) {
-    const c = NET.cand || { host: 0, srflx: 0, relay: 0 };
-    coopStatus('✗ сорвалось [лок:' + c.host + ' внеш:' + c.srflx + ' реле:' + c.relay + '] — ' +
-      (c.relay === 0 ? 'релей мёртв: подключите оба устройства к хот-споту телефона и повторите' : 'попробуйте ещё раз'));
-  }
+  if (preGame) coopStatus('✗ соединение сорвалось — попробуйте ещё раз');
   if (wasHostInRun) announce('СВЯЗЬ ПОТЕРЯНА — ДОБИВАЙ САМ');
   if (wasGuestInRun) {
     state = 'menu';
@@ -1021,7 +1016,7 @@ function netOnMsg(raw) {
       NET.verBad = true;
       $('coopStartB').style.display = 'none';
       coopStatus('✗ РАЗНЫЕ ВЕРСИИ ИГРЫ (у вас v' + GAMEVER + ', у напарника v' + (m.v || '1-2') +
-        '). Оба обновите страницу с зажатым обновлением и попробуйте снова');
+        '). Оба обновите страницу (потяните вниз или Ctrl+R) и попробуйте снова');
     }
     return;
   }
@@ -1059,7 +1054,7 @@ function netOnMsg(raw) {
       if (decals.length > 120) decals.shift();
       decals.push({ x: m.x, y: m.y, r: m.r, col: '#8fb43a', t: 9, seed: irnd(1, 999) });
     }
-    else if (m.k === 'lvo') { $('coopLvl').textContent = 'ХОСТ ВЫБИРАЕТ УЛУЧШЕНИЕ…'; $('coopLvl').style.display = ''; }
+    else if (m.k === 'lvo') { $('coopLvl').textContent = 'НАПАРНИК ВЫБИРАЕТ УЛУЧШЕНИЕ…'; $('coopLvl').style.display = ''; }
     else if (m.k === 'glv') { NET.pend = (NET.pend || 0) + 1; if (state === 'play') openLevelUp(); }
     else if (m.k === 'fx') {
       if (m.f === 'fl') { if (flashes.length < 40) flashes.push({ x: m.x, y: m.y, a: m.a, col: m.c, s: m.s, t: 0.07 }); }
@@ -1070,7 +1065,7 @@ function netOnMsg(raw) {
       else if (m.f === 'th') { burst(m.x, m.y, '#e88a4a', 8); SFX.thud(); }
     }
     else if (m.k === 'lvc') $('coopLvl').style.display = 'none';
-    else if (m.k === 'lvo2') { $('coopLvl').textContent = 'ХОСТ ЧИТАЕТ ЗАПИСЬ…'; $('coopLvl').style.display = ''; }
+    else if (m.k === 'lvo2') { $('coopLvl').textContent = 'НАПАРНИК ЧИТАЕТ ЗАПИСЬ…'; $('coopLvl').style.display = ''; }
     else if (m.k === 'over') guestEnd(false);
     else if (m.k === 'win') guestEnd(true);
   }
@@ -1948,18 +1943,18 @@ function saveGame() {
 
 /* ================= мета-улучшения Схрона ================= */
 const META = [
-  { id: 'vita',   n: 'ЖИВУЧЕСТЬ',       d: '+10 к макс. здоровью на старте', max: 5, base: 20, inf: true, dInf: 'Переплавка: +2 HP за уровень' },
+  { id: 'vita',   n: 'ЖИВУЧЕСТЬ',       d: '+10 к макс. здоровью на старте', max: 5, base: 20, inf: true, dInf: 'Переплавка: +2 здоровья за уровень' },
   { id: 'calib',  n: 'КАЛИБРОВКА',      d: '+5% ко всему урону',            max: 5, base: 25, inf: true, dInf: 'Переплавка: +1% урона за уровень' },
   { id: 'legs',   n: 'РАЗМИНКА',        d: '+4% к скорости бега',           max: 4, base: 25, inf: true, dInf: 'Переплавка: +0.5% скорости за уровень' },
   { id: 'mag',    n: 'МАГНЕТИЗМ',       d: '+12% к радиусу сбора',          max: 4, base: 20, inf: true, dInf: 'Переплавка: +3% радиуса за уровень' },
-  { id: 'rer',    n: 'ЗАПАСНОЙ ПЛАН',   d: '+1 реролл выбора улучшений',    max: 3, base: 40 },
+  { id: 'rer',    n: 'ЗАПАСНОЙ ПЛАН',   d: '+1 пересдача карт улучшений',    max: 3, base: 40 },
   { id: 'torg',   n: 'ТОРГ СО СХРОНОМ', d: '+10% скрапа с вылазки',         max: 5, base: 30, inf: true, dInf: 'Переплавка: +2% скрапа за уровень' },
-  { id: 'revive', n: 'ВТОРОЕ ДЫХАНИЕ',  d: 'Один раз за вылазку встаёшь с 50% HP', max: 1, base: 120 },
+  { id: 'revive', n: 'ВТОРОЕ ДЫХАНИЕ',  d: 'Один раз за вылазку встаёшь с половиной здоровья', max: 1, base: 120 },
   { id: 'arsenal',n: 'ШИРОКИЙ АРСЕНАЛ', d: 'Четвёртая карта при выборе улучшений', max: 1, base: 150 }
 ];
 /* вторая страница Схрона — открывается победой над Первоцветом */
 const META2 = [
-  { id: 'ban',      n: 'ЧЁРНЫЙ СПИСОК',      d: 'Вычеркнуть карту из пула навсегда (выбор при покупке)', max: 2, base: 220 },
+  { id: 'ban',      n: 'ЧЁРНЫЙ СПИСОК',      d: 'Убрать карту из выбора улучшений навсегда (выберешь какую при покупке)', max: 2, base: 220 },
   { id: 'contract', n: 'КОНТРАКТ',           d: 'Выбор стартового оружия перед вылазкой',                max: 1, base: 300 },
   { id: 'qual',     n: 'ГАРАНТИЯ КАЧЕСТВА',  d: 'Первая карта каждого выбора — минимум редкая',          max: 1, base: 260 },
   { id: 'stock',    n: 'ПОЛЕВОЙ ЗАПАС',      d: 'Старт вылазки с бонусным уровнем (+1 за уровень)',      max: 2, base: 180 },
@@ -1970,8 +1965,8 @@ const METABY = {};
 META.concat(META2).forEach(m => METABY[m.id] = m);
 /* припасы: расходники на одну вылазку */
 const SUPPLIES = [
-  { id: 'flask', n: 'ФЛЯГА',   d: '+40 HP при падении ниже 30%', cost: 25 },
-  { id: 'rer',   n: 'РЕРОЛЛ',  d: '+1 реролл на эту вылазку',    cost: 20 },
+  { id: 'flask', n: 'ФЛЯГА',   d: '+40 здоровья, когда останется меньше трети', cost: 25 },
+  { id: 'rer',   n: 'ПЕРЕСДАЧА', d: '+1 пересдача карт на эту вылазку', cost: 20 },
   { id: 'ammo',  n: 'ПАТРОНЫ', d: '+10% урона на эту вылазку',   cost: 30 }
 ];
 const mlvl = id => SAVE.meta[id] || 0;
@@ -1986,11 +1981,11 @@ const mcost = m => {
 const CHARS = [
   { id: 'rez',  n: 'РЕЗЧИК', d: 'Сборщик металла. Верит только своему бластеру: +25% к его урону.', cost: 0,
     ap() { Wp.blaster.dmg *= 1.25; } },
-  { id: 'him',  n: 'ХИМИК',  d: 'Варит кислоту из того, что цветёт. Старт с кислотным облаком, +15 HP, −6% скорости.', cost: 100,
+  { id: 'him',  n: 'ХИМИК',  d: 'Варит кислоту из того, что цветёт. Старт с кислотным облаком, +15 здоровья, −6% скорости.', cost: 100,
     ap() { grantPool('aura'); player.maxHp += 15; player.hp += 15; player.spd *= 0.94; } },
   { id: 'mon',  n: 'МОНТЁР', d: 'Собрала двух дронов из обломков купола. Старт с ними и +10% скорости.', cost: 200,
     ap() { grantPool('dr'); grantPool('dr'); player.spd *= 1.10; } },
-  { id: 'smo',  n: 'СМОТРИТЕЛЬ', d: 'Тот, кто вёл журнал, дошёл до конца — вместе с тобой. +2 удачи, +15% скрапа, +1 реролл.', ach: 'arch',
+  { id: 'smo',  n: 'СМОТРИТЕЛЬ', d: 'Тот, кто вёл журнал, дошёл до конца — вместе с тобой. +2 удачи, +15% скрапа, +1 пересдача.', ach: 'arch',
     ap() { player.luck += 2; scrapMult *= 1.15; rerolls += 1; } }
 ];
 
@@ -2112,7 +2107,7 @@ function rwLabel(a) {
   if (a.rw.scrap) return '+' + a.rw.scrap + ' ⚙';
   if (a.rw.pool) return 'открывает: ' + a.rw.pool;
   if (a.rw.char) return 'персонаж: ' + a.rw.char;
-  if (a.rw.reroll) return '+1 реролл навсегда';
+  if (a.rw.reroll) return '+1 пересдача навсегда';
   return '';
 }
 function checkAch() {
@@ -2194,12 +2189,12 @@ const POOL = [
     ap(m) { if (!Wp.saw.on) Wp.saw.on = true; else { Wp.saw.n += 1; Wp.saw.dmg += 8 * m; } } },
   { id: 'turret', wpn: 1, req: 'legion', n: 'ТУРЕЛЬ «СТРАЖ»',   d: 'Ставит автономную турель',         d2: '+урон, живёт дольше',       max: 4, lvl: 0, hex: '#e8dcc4',
     ap(m) { if (!Wp.turret.on) Wp.turret.on = true; else { Wp.turret.dmg += 8 * m; Wp.turret.life += 1.5; Wp.turret.rate *= 0.92; } } },
-  { id: 'vamp',  req: 'gold',           n: 'СПОРОВЫЙ ГОЛОД',    d: 'Шанс 6%: убийство лечит 3 HP',     max: 4, lvl: 0, hex: '#d4453a',
+  { id: 'vamp',  req: 'gold',           n: 'СПОРОВЫЙ ГОЛОД',    d: 'Шанс 6%: убийство возвращает 3 здоровья',     max: 4, lvl: 0, hex: '#d4453a',
     ap(m) { player.vamp += 0.06 * m; } },
   { id: 'boots',  n: 'ПРУЖИННЫЕ БОТЫ',   d: 'Скорость бега +13%',            max: 4, lvl: 0, hex: '#e8dcc4', ap(m) { player.spd *= 1 + 0.13 * m; } },
   { id: 'arm',    n: 'ЛИСТ БРОНИ',       d: '+25 к макс. здоровью и лечение', max: 5, lvl: 0, hex: '#d4453a', ap(m) { const v = Math.round(25 * m); player.maxHp += v; player.hp = Math.min(player.maxHp, player.hp + v); } },
   { id: 'mag',    n: 'МАГНИТНАЯ КАТУШКА', d: 'Радиус сбора кристаллов +35%',  max: 4, lvl: 0, hex: '#9fdc3c', ap(m) { player.magnet *= 1 + 0.35 * m; } },
-  { id: 'reg',    n: 'ГРИБНОЙ ОТВАР',    d: 'Регенерация +0.6 HP/с',         max: 4, lvl: 0, hex: '#d4453a', ap(m) { player.regen += 0.6 * m; } },
+  { id: 'reg',    n: 'ГРИБНОЙ ОТВАР',    d: 'Заживление: +0.6 здоровья в секунду',         max: 4, lvl: 0, hex: '#d4453a', ap(m) { player.regen += 0.6 * m; } },
   { id: 'amp',    n: 'СТИМУЛЯТОР',       d: 'Весь наносимый урон +12%',      max: 5, lvl: 0, hex: '#e0b23a', ap(m) { player.dmgM *= 1 + 0.12 * m; } },
   { id: 'karkas', n: 'ЭКЗОКАРКАС',       d: 'Броня: входящий урон −1',       max: 4, lvl: 0, hex: '#8a8168', ap(m) { player.armor += m >= 1.5 ? 2 : 1; } },
   { id: 'crit',   n: 'ХИЩНЫЙ ПРИЦЕЛ',    d: 'Шанс крита +6% (урон ×2)',      max: 5, lvl: 0, hex: '#e0b23a', ap(m) { player.crit += 0.06 * m; } },
@@ -2282,11 +2277,11 @@ function buildCards() {
     if (p.evo) {
       b.classList.add('evo');
       b.style.setProperty('--ac', '#e0b23a');
-      b.innerHTML = '<b>' + p.evo.n + '</b><span>' + p.evo.d + '</span><em class="rar">◈ ЭВО</em>' + icoImg(EVOIC[p.evo.id], '#e0b23a');
+      b.innerHTML = '<b>' + p.evo.n + '</b><span>' + p.evo.d + '</span><em class="rar">◈ ЭВОЛЮЦИЯ</em>' + icoImg(EVOIC[p.evo.id], '#e0b23a');
       b.onclick = () => { p.evo.ap(); SAVE.stats.evos++; checkAch(); SFX.evolve(); announce(p.evo.n); if (NET.role === 'guest' && NET.ready) netSend(NET.dcR, { t: 'pk', evo: p.evo.id }); closeLevelUp(); };
     } else if (p.heal) {
       b.style.setProperty('--ac', '#d4453a');
-      b.innerHTML = '<b>ПОЛЕВАЯ АПТЕЧКА</b><span>+40 HP</span>' + icoImg('heal', '#d4453a');
+      b.innerHTML = '<b>ПОЛЕВАЯ АПТЕЧКА</b><span>+40 здоровья</span>' + icoImg('heal', '#d4453a');
       b.onclick = () => { player.hp = Math.min(player.maxHp, player.hp + 40); SFX.pick(); if (NET.role === 'guest' && NET.ready) netSend(NET.dcR, { t: 'pk', heal: 1 }); closeLevelUp(); };
     } else {
       const u = p.u, m = p.m;
@@ -2306,7 +2301,7 @@ function buildCards() {
     box.appendChild(b);
   });
   const rb = $('rerollB');
-  rb.textContent = '⟳ РЕРОЛЛ (' + rerolls + ')';
+  rb.textContent = '⟳ ПЕРЕСДАТЬ (' + rerolls + ')';
   rb.disabled = rerolls <= 0;
   rb.style.opacity = rerolls > 0 ? 1 : 0.35;
 }
@@ -4369,7 +4364,7 @@ $('coopHostB').onclick = async () => {
   }, async (topic, payload) => {
     if (topic.slice(-2) === '/a') {
       coopStatus('ответ получен, соединяю…');
-      try { await netHostAccept(payload); } catch (e) { coopStatus('битый ответ, пробуй ручной обмен'); }
+      try { await netHostAccept(payload); } catch (e) { coopStatus('ответ не читается — проверь, что скопирован целиком'); }
     }
   }, () => coopStatus('эфир занят — используй ручной обмен ниже'));
 };
@@ -4399,7 +4394,7 @@ $('coopGoB').onclick = () => {
 };
 $('coopManApplyB').onclick = async () => {
   try { await netHostAccept($('coopAnsIn').value); coopStatus('соединяю…'); }
-  catch (e) { coopStatus('битый ответ'); }
+  catch (e) { coopStatus('ответ не читается'); }
 };
 $('coopManOfferB').onclick = async () => {
   try {
@@ -4407,7 +4402,7 @@ $('coopManOfferB').onclick = async () => {
     const ans = await netGuestAnswer($('coopOfferIn').value);
     $('coopAnsOut').value = ans;
     coopStatus('скопируй ОТВЕТ и отправь хосту');
-  } catch (e) { coopStatus('битый оффер'); }
+  } catch (e) { coopStatus('приглашение не читается'); }
 };
 const netCopy = el => {
   try { el.select(); navigator.clipboard.writeText(el.value); } catch (e) { try { document.execCommand('copy'); } catch (e2) {} }
