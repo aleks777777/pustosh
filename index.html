@@ -274,7 +274,7 @@ html,body{overscroll-behavior:none}
 <!-- КООП -->
 <div id="coop" class="ov hidden">
   <div class="panel">
-    <div class="eyebrow">кооп-рейд v4 · p2p напрямую, без сервера · сектор 07</div>
+    <div class="eyebrow">кооп-рейд v5, без сервера · сектор 07</div>
     <h2>КООП</h2>
     <div id="coopStatus" class="metaline">выбери роль</div>
     <div id="coopPick">
@@ -668,7 +668,12 @@ function radioOnce(key, msg, urgent) {
 }
 
 /* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
-const GAMEVER = 4;
+const GAMEVER = 5;
+const RELAY_URL = ''; // wss://... с Railway — вставится после деплоя
+function relayURL() {
+  try { const o = localStorage.getItem('pustosh-relay'); if (o) return o; } catch (e) {}
+  return RELAY_URL;
+}
 const NET = { role: null, ready: false, pc: null, dcR: null, dcU: null, code: '',
   ping: 0, ally: null, eid: 1, gEn: {}, sendT: 0, pingT: 0, auraT: 0, lastHp: 999,
   wp2: {}, g2lvl: {}, gp: 0, pend: 0, allyAuraR: 0 };
@@ -820,6 +825,26 @@ const MQ = {
   }
 };
 
+function wsConnect(slot, code) {
+  let ws;
+  try { ws = new WebSocket(relayURL()); } catch (e) { coopStatus('✗ релей недоступен'); return; }
+  NET.ws = ws;
+  ws.onopen = () => ws.send(JSON.stringify({ j: slot, room: code }));
+  ws.onmessage = ev => {
+    let m = null;
+    try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.paired) {
+      const ch = { readyState: 'open', send: msg => { try { ws.send(msg); } catch (e) {} } };
+      NET.dcR = ch; NET.dcU = ch;
+      netReady();
+      return;
+    }
+    if (m.err) { coopStatus('✗ ' + m.err); return; }
+    netOnMsg(ev.data);
+  };
+  ws.onclose = () => netDrop();
+  ws.onerror = () => {};
+}
 function netReady() {
   if (NET.ready) return;
   NET.ready = true;
@@ -840,6 +865,8 @@ function netDrop() {
   const wasHostInRun = NET.role === 'host' && NET.ready && state === 'play';
   try { netSend(NET.dcR, { t: 'bye' }); } catch (e) {}
   try { if (NET.pc) NET.pc.close(); } catch (e) {}
+  try { if (NET.ws) { NET.ws.onclose = null; NET.ws.close(); } } catch (e) {}
+  NET.ws = null;
   MQ.stop();
   const preGame = wasReadyPre === false && state !== 'play';
   NET.role = null; NET.ready = false; NET.pc = NET.dcR = NET.dcU = null;
@@ -4283,6 +4310,11 @@ $('coopHostB').onclick = async () => {
   $('coopPick').style.display = 'none';
   $('coopHost').style.display = '';
   $('coopCode').textContent = NET.code;
+  if (relayURL()) {
+    coopStatus('жду напарника по коду ' + NET.code + '…');
+    wsConnect('h', NET.code);
+    return;
+  }
   coopStatus('готовлю канал…');
   let offer;
   try { offer = await netHostStart(); } catch (e) { coopStatus('WebRTC недоступен: ' + e.message); return; }
@@ -4308,6 +4340,7 @@ $('coopGoB').onclick = () => {
   const code = ($('coopCodeIn').value || '').trim().toUpperCase();
   if (code.length < 3) { coopStatus('введи код'); return; }
   coopStatus('ищу комнату ' + code + '…');
+  if (relayURL()) { wsConnect('g', code); return; }
   MQ.connect(() => {
     MQ.sub('pustosh7/' + code + '/o');
   }, async (topic, payload) => {
