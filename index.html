@@ -145,8 +145,6 @@ html,body{overscroll-behavior:none}
 #timer{top:calc(12px + env(safe-area-inset-top,0px))}
 #bossbar{top:calc(44px + env(safe-area-inset-top,0px))}
 #radio{left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px))}
-.nettx{width:100%;height:62px;background:#0c0a07;border:1px solid rgba(232,220,196,.3);color:var(--dim);
-  font-family:inherit;font-size:9px;margin:6px 0;pointer-events:auto;resize:none}
 .netin{width:170px;background:#0c0a07;border:1px solid rgba(159,220,60,.5);color:var(--acid);
   font-family:inherit;font-size:24px;letter-spacing:.3em;text-align:center;padding:9px;pointer-events:auto}
 .netdet{margin-top:16px;font-size:10px}
@@ -286,27 +284,11 @@ html,body{overscroll-behavior:none}
       <div id="coopCode" style="font-size:34px;letter-spacing:.3em;color:var(--acid);margin:8px 0 10px"></div>
       <button id="coopShareB" class="ghost" style="margin-bottom:12px">⇪ ПОДЕЛИТЬСЯ ССЫЛКОЙ</button>
       <button id="coopStartB" class="big" style="display:none">▶ В БОЙ</button>
-      <details class="netdet"><summary>ручной обмен — если код не сработал</summary>
-        <div class="sech">1 · СКОПИРУЙ И ОТПРАВЬ НАПАРНИКУ</div>
-        <textarea id="coopOfferTxt" class="nettx" readonly></textarea>
-        <button id="coopCopyOfferB" class="ghost">КОПИРОВАТЬ</button>
-        <div class="sech">2 · ВСТАВЬ ЕГО ОТВЕТ</div>
-        <textarea id="coopAnsIn" class="nettx"></textarea>
-        <button id="coopManApplyB" class="ghost">ПРИМЕНИТЬ</button>
-      </details>
     </div>
     <div id="coopJoin" style="display:none">
       <div class="sech">КОД КОМНАТЫ НАПАРНИКА</div>
       <input id="coopCodeIn" class="netin" maxlength="6" placeholder="X7K2" autocomplete="off"/>
       <button id="coopGoB" class="big" style="margin-top:10px">ПОДКЛЮЧИТЬСЯ</button>
-      <details class="netdet"><summary>ручной обмен — если код не сработал</summary>
-        <div class="sech">1 · ВСТАВЬ ПРИГЛАШЕНИЕ НАПАРНИКА</div>
-        <textarea id="coopOfferIn" class="nettx"></textarea>
-        <button id="coopManOfferB" class="ghost">СОЗДАТЬ ОТВЕТ</button>
-        <div class="sech">2 · СКОПИРУЙ ОТВЕТ И ОТПРАВЬ НАПАРНИКУ</div>
-        <textarea id="coopAnsOut" class="nettx" readonly></textarea>
-        <button id="coopCopyAnsB" class="ghost">КОПИРОВАТЬ</button>
-      </details>
     </div>
     <div class="btnrow"><button id="coopBackB" class="ghost">НАЗАД</button></div>
   </div>
@@ -780,71 +762,6 @@ async function netGuestAnswer(offerB64) {
 }
 async function netHostAccept(ansB64) { await NET.pc.setRemoteDescription(b64d(ansB64)); }
 
-/* мини-клиент MQTT 3.1.1 поверх WebSocket — только для обмена визитками */
-const MQ = {
-  urls: ['wss://broker.emqx.io:8084/mqtt', 'wss://test.mosquitto.org:8081'],
-  ws: null, alive: null,
-  str(s) { const b = new TextEncoder().encode(s); const o = new Uint8Array(b.length + 2); o[0] = b.length >> 8; o[1] = b.length & 255; o.set(b, 2); return o; },
-  varlen(n) { const o = []; do { let d = n % 128; n = Math.floor(n / 128); if (n) d |= 128; o.push(d); } while (n); return new Uint8Array(o); },
-  pkt(type, ...parts) {
-    let len = 0; parts.forEach(p => len += p.length);
-    const vl = this.varlen(len);
-    const o = new Uint8Array(1 + vl.length + len);
-    o[0] = type; o.set(vl, 1);
-    let at = 1 + vl.length;
-    parts.forEach(p => { o.set(p, at); at += p.length; });
-    return o;
-  },
-  connect(onReady, onPub, onFail) {
-    let i = 0;
-    const tryUrl = () => {
-      if (i >= this.urls.length) { onFail && onFail(); return; }
-      let ws;
-      try { ws = new WebSocket(this.urls[i++], 'mqtt'); } catch (e) { tryUrl(); return; }
-      ws.binaryType = 'arraybuffer';
-      let ok = false;
-      const to = setTimeout(() => { if (!ok) { try { ws.close(); } catch (e) {} tryUrl(); } }, 6000);
-      ws.onopen = () => {
-        const cid = 'pust' + Math.random().toString(36).slice(2, 10);
-        ws.send(this.pkt(0x10, this.str('MQTT'), new Uint8Array([4, 2, 0, 60]), this.str(cid)));
-      };
-      ws.onmessage = ev => {
-        const d = new Uint8Array(ev.data);
-        const t = d[0] >> 4;
-        if (t === 2) {
-          ok = true; clearTimeout(to); this.ws = ws;
-          this.alive = setInterval(() => { try { ws.send(new Uint8Array([0xC0, 0])); } catch (e) {} }, 25000);
-          onReady();
-        } else if (t === 3) {
-          let at = 1, mult = 1, len = 0, b;
-          do { b = d[at++]; len += (b & 127) * mult; mult *= 128; } while (b & 128);
-          const end = at + len;
-          const tl = (d[at] << 8) | d[at + 1];
-          const topic = new TextDecoder().decode(d.slice(at + 2, at + 2 + tl));
-          const payload = new TextDecoder().decode(d.slice(at + 2 + tl, end));
-          onPub(topic, payload);
-        }
-      };
-      ws.onerror = () => { if (!ok) { clearTimeout(to); tryUrl(); } };
-    };
-    tryUrl();
-  },
-  sub(topic) {
-    const t = this.str(topic);
-    const o = new Uint8Array(t.length + 3);
-    o[0] = 0; o[1] = 1; o.set(t, 2); o[t.length + 2] = 0;
-    this.ws.send(this.pkt(0x82, o));
-  },
-  pub(topic, msg, retain) {
-    this.ws.send(this.pkt(retain ? 0x31 : 0x30, this.str(topic), new TextEncoder().encode(msg)));
-  },
-  stop() {
-    if (this.alive) clearInterval(this.alive);
-    try { if (this.ws) this.ws.close(); } catch (e) {}
-    this.ws = null; this.alive = null;
-  }
-};
-
 function wsConnect(slot, code) {
   let ws;
   try { ws = new WebSocket(relayURL()); } catch (e) { coopStatus('✗ релей недоступен'); return; }
@@ -868,7 +785,6 @@ function wsConnect(slot, code) {
 function netReady() {
   if (NET.ready) return;
   NET.ready = true;
-  MQ.stop();
   NET.lastHp = 999;
   netSend(NET.dcR, { t: 'hi', v: GAMEVER });
   if (NET.ws && NET.role === 'host') {
@@ -895,7 +811,6 @@ function netDrop() {
   try { if (NET.pc) NET.pc.close(); } catch (e) {}
   try { if (NET.ws) { NET.ws.onclose = null; NET.ws.close(); } } catch (e) {}
   NET.ws = null;
-  MQ.stop();
   const preGame = wasReadyPre === false && state !== 'play';
   NET.role = null; NET.ready = false; NET.pc = NET.dcR = NET.dcU = NET.rtcR = NET.rtcU = null;
   NET.p2p = false;
@@ -4348,25 +4263,8 @@ $('coopHostB').onclick = async () => {
   $('coopPick').style.display = 'none';
   $('coopHost').style.display = '';
   $('coopCode').textContent = NET.code;
-  if (relayURL()) {
-    coopStatus('жду напарника по коду ' + NET.code + '…');
-    wsConnect('h', NET.code);
-    return;
-  }
-  coopStatus('готовлю канал…');
-  let offer;
-  try { offer = await netHostStart(); } catch (e) { coopStatus('WebRTC недоступен: ' + e.message); return; }
-  $('coopOfferTxt').value = offer;
   coopStatus('жду напарника по коду ' + NET.code + '…');
-  MQ.connect(() => {
-    MQ.sub('pustosh7/' + NET.code + '/a');
-    MQ.pub('pustosh7/' + NET.code + '/o', offer, true);
-  }, async (topic, payload) => {
-    if (topic.slice(-2) === '/a') {
-      coopStatus('ответ получен, соединяю…');
-      try { await netHostAccept(payload); } catch (e) { coopStatus('ответ не читается — проверь, что скопирован целиком'); }
-    }
-  }, () => coopStatus('эфир занят — используй ручной обмен ниже'));
+  wsConnect('h', NET.code);
 };
 $('coopJoinB').onclick = () => {
   NET.role = 'guest';
@@ -4378,34 +4276,7 @@ $('coopGoB').onclick = () => {
   const code = ($('coopCodeIn').value || '').trim().toUpperCase();
   if (code.length < 3) { coopStatus('введи код'); return; }
   coopStatus('ищу комнату ' + code + '…');
-  if (relayURL()) { wsConnect('g', code); return; }
-  MQ.connect(() => {
-    MQ.sub('pustosh7/' + code + '/o');
-  }, async (topic, payload) => {
-    if (topic.slice(-2) === '/o') {
-      coopStatus('комната найдена, соединяю…');
-      try {
-        const ans = await netGuestAnswer(payload);
-        MQ.pub('pustosh7/' + code + '/a', ans, false);
-        coopStatus('рукопожатие…');
-      } catch (e) { coopStatus('ошибка соединения: ' + e.message); }
-    }
-  }, () => coopStatus('эфир занят — используй ручной обмен ниже'));
-};
-$('coopManApplyB').onclick = async () => {
-  try { await netHostAccept($('coopAnsIn').value); coopStatus('соединяю…'); }
-  catch (e) { coopStatus('ответ не читается'); }
-};
-$('coopManOfferB').onclick = async () => {
-  try {
-    coopStatus('готовлю ответ…');
-    const ans = await netGuestAnswer($('coopOfferIn').value);
-    $('coopAnsOut').value = ans;
-    coopStatus('скопируй ОТВЕТ и отправь хосту');
-  } catch (e) { coopStatus('приглашение не читается'); }
-};
-const netCopy = el => {
-  try { el.select(); navigator.clipboard.writeText(el.value); } catch (e) { try { document.execCommand('copy'); } catch (e2) {} }
+  wsConnect('g', code);
 };
 $('coopShareB').onclick = () => {
   const url = location.origin + location.pathname + '#join=' + NET.code;
@@ -4418,8 +4289,6 @@ $('coopShareB').onclick = () => {
     setTimeout(() => { $('coopShareB').textContent = '⇪ ПОДЕЛИТЬСЯ ССЫЛКОЙ'; }, 1800);
   }
 };
-$('coopCopyOfferB').onclick = () => netCopy($('coopOfferTxt'));
-$('coopCopyAnsB').onclick = () => netCopy($('coopAnsOut'));
 $('coopStartB').onclick = () => {
   if (NET.verBad) { coopStatus('✗ версии разные — сначала обновите страницы'); return; }
   SAVE.sector = 0;
