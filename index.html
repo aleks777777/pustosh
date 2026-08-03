@@ -234,14 +234,14 @@ html,body{overscroll-behavior:none}
 <!-- СБОРЫ -->
 <div id="brief" class="ov hidden">
   <div class="panel">
-    <div class="eyebrow">сборы перед вылазкой</div>
+    <div class="eyebrow">кто идёт и что берёт</div>
     <h2>СБОРЫ</h2>
     <div class="metaline" id="briefScrap"></div>
     <div class="sech">СЕКТОР</div>
     <div id="sectors"></div>
     <div class="sech">БОЕЦ</div>
     <div id="chars"></div>
-    <div class="sech">ПРИПАСЫ НА ЭТУ ВЫЛАЗКУ</div>
+    <div class="sech">ПРИПАСЫ — на одну вылазку</div>
     <div id="supplies" class="supline"></div>
     <button id="deployB" class="big">▶ В БОЙ</button>
     <div class="btnrow"><button id="briefBackB" class="ghost">НАЗАД</button></div>
@@ -272,7 +272,7 @@ html,body{overscroll-behavior:none}
 <!-- КООП -->
 <div id="coop" class="ov hidden">
   <div class="panel">
-    <div class="eyebrow">рейд вдвоём v6 · по коду или ссылке · сектор 07</div>
+    <div class="eyebrow">вылазка вдвоём · сектор 07</div>
     <h2>ИГРА ВДВОЁМ</h2>
     <div id="coopStatus" class="metaline">выбери роль</div>
     <div id="coopPick">
@@ -286,9 +286,9 @@ html,body{overscroll-behavior:none}
       <button id="coopStartB" class="big" style="display:none">▶ В БОЙ</button>
     </div>
     <div id="coopJoin" style="display:none">
-      <div class="sech">КОД КОМНАТЫ НАПАРНИКА</div>
+      <div class="sech">КОД ОТ НАПАРНИКА</div>
       <input id="coopCodeIn" class="netin" maxlength="6" placeholder="X7K2" autocomplete="off"/>
-      <button id="coopGoB" class="big" style="margin-top:10px">ПОДКЛЮЧИТЬСЯ</button>
+      <button id="coopGoB" class="big" style="margin-top:10px">ВОЙТИ</button>
     </div>
     <div class="btnrow"><button id="coopBackB" class="ghost">НАЗАД</button></div>
   </div>
@@ -297,7 +297,7 @@ html,body{overscroll-behavior:none}
   color:var(--gold);letter-spacing:.3em;font-size:13px;text-shadow:0 0 12px rgba(224,178,58,.5)">НАПАРНИК ВЫБИРАЕТ УЛУЧШЕНИЕ…</div>
 <div id="coopEnd" class="ov hidden">
   <div class="panel">
-    <div class="eyebrow">рейд окончен</div>
+    <div class="eyebrow">вылазка вдвоём</div>
     <h2 id="coopEndH">КОНЕЦ</h2>
     <div id="coopEndTxt" class="metaline"></div>
     <button id="coopEndB" class="big">В СХРОН</button>
@@ -681,21 +681,6 @@ function netMakePC() {
     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
   ]) });
   NET.pc = pc;
-  NET.cand = { host: 0, srflx: 0, relay: 0 };
-  pc.onicecandidate = ev => {
-    if (!ev.candidate) return;
-    const c = ev.candidate.candidate || '';
-    if (c.indexOf(' typ relay') >= 0) NET.cand.relay++;
-    else if (c.indexOf(' typ srflx') >= 0) NET.cand.srflx++;
-    else if (c.indexOf(' typ host') >= 0) NET.cand.host++;
-  };
-  const candStr = () => 'лок:' + NET.cand.host + ' внеш:' + NET.cand.srflx + ' реле:' + NET.cand.relay;
-  pc.oniceconnectionstatechange = () => {
-    if (NET.ready || NET.ws) return;
-    const st = pc.iceConnectionState;
-    if (st === 'checking') coopStatus('соединяю напрямую…');
-    else if (st === 'failed') coopStatus('✗ напрямую не вышло — подключайся по коду комнаты');
-  };
   pc.onconnectionstatechange = () => {
     if (['failed', 'disconnected', 'closed'].indexOf(pc.connectionState) < 0) return;
     if (NET.p2p || !NET.ws) { netDrop(); return; }
@@ -735,8 +720,6 @@ function migrateP2P() {
   const ws = NET.ws;
   NET.ws = null;
   if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} }
-  if (state === 'play') announce('СВЯЗЬ: НАПРЯМУЮ');
-  else coopStatus('СВЯЗЬ: НАПРЯМУЮ');
 }
 const b64e = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
 const b64d = s => JSON.parse(decodeURIComponent(escape(atob(s.trim()))));
@@ -764,7 +747,7 @@ async function netHostAccept(ansB64) { await NET.pc.setRemoteDescription(b64d(an
 
 function wsConnect(slot, code) {
   let ws;
-  try { ws = new WebSocket(relayURL()); } catch (e) { coopStatus('✗ релей недоступен'); return; }
+  try { ws = new WebSocket(relayURL()); } catch (e) { coopStatus('нет связи со Схроном — проверь интернет'); return; }
   NET.ws = ws;
   ws.onopen = () => ws.send(JSON.stringify({ j: slot, room: code }));
   ws.onmessage = ev => {
@@ -797,9 +780,9 @@ function netReady() {
   }
   try { SFX.evolve(); } catch (e) {}
   if (NET.role === 'host') {
-    coopStatus('СВЯЗЬ УСТАНОВЛЕНА · жми В БОЙ');
+    coopStatus('напарник на связи — веди в бой');
     $('coopStartB').style.display = '';
-  } else coopStatus('СВЯЗЬ УСТАНОВЛЕНА · напарник запускает рейд…');
+  } else coopStatus('связь есть — напарник командует выход');
 }
 function coopStatus(m) { $('coopStatus').textContent = m; }
 function netDrop() {
@@ -817,7 +800,7 @@ function netDrop() {
   NET.ally = null; NET.gEn = {};
   $('coopLvl').style.display = 'none';
   $('coopStartB').style.display = 'none';
-  if (preGame) coopStatus('✗ соединение сорвалось — попробуйте ещё раз');
+  if (preGame) coopStatus('связь оборвалась — попробуй ещё раз');
   if (wasHostInRun) announce('СВЯЗЬ ПОТЕРЯНА — ДОБИВАЙ САМ');
   if (wasGuestInRun) {
     state = 'menu';
@@ -930,8 +913,7 @@ function netOnMsg(raw) {
     if (m.v !== GAMEVER) {
       NET.verBad = true;
       $('coopStartB').style.display = 'none';
-      coopStatus('✗ РАЗНЫЕ ВЕРСИИ ИГРЫ (у вас v' + GAMEVER + ', у напарника v' + (m.v || '1-2') +
-        '). Оба обновите страницу (потяните вниз или Ctrl+R) и попробуйте снова');
+      coopStatus('у вас разные выпуски игры — обоим обновить страницу (потянуть вниз или Ctrl+R) и собраться заново');
     }
     return;
   }
@@ -3970,10 +3952,6 @@ function renderBrief() {
 }
 function renderSupplies() {
   const sb = $('supplies'); sb.innerHTML = '';
-  const lbl = document.createElement('span');
-  lbl.className = 'supl';
-  lbl.textContent = 'ПРИПАСЫ:';
-  sb.appendChild(lbl);
   if (mlvl('contract')) {
     const opts = [''].concat(POOL.filter(u => u.wpn && (!u.req || SAVE.ach[u.req])).map(u => u.id));
     const cb = document.createElement('button');
@@ -4036,11 +4014,11 @@ function renderShop() {
   $('shopScrap').textContent = SAVE.scrap + '  ·  население Схрона: ' + (9 + SAVE.pop);
   const box = $('shopList'); box.innerHTML = '';
   const h1 = document.createElement('div');
-  h1.className = 'sech'; h1.textContent = 'СНАРЯЖЕНИЕ · выкупленное уходит в переплавку';
+  h1.className = 'sech'; h1.textContent = 'СНАРЯЖЕНИЕ';
   box.appendChild(h1);
   META.forEach(m => shopRow(box, m));
   const h2 = document.createElement('div');
-  h2.className = 'sech'; h2.textContent = 'АРСЕНАЛ · качественные улучшения';
+  h2.className = 'sech'; h2.textContent = 'АРСЕНАЛ';
   box.appendChild(h2);
   if (SAVE.wins2 < 1) {
     const lock = document.createElement('div');
@@ -4254,7 +4232,7 @@ $('coopB').onclick = () => {
   $('coopPick').style.display = '';
   $('coopHost').style.display = 'none';
   $('coopJoin').style.display = 'none';
-  coopStatus('выбери роль');
+  coopStatus('один создаёт комнату — второй входит по коду или ссылке');
 };
 $('coopBackB').onclick = () => { netDrop(); hide('coop'); show('start'); renderMenu(); };
 $('coopHostB').onclick = async () => {
@@ -4263,7 +4241,7 @@ $('coopHostB').onclick = async () => {
   $('coopPick').style.display = 'none';
   $('coopHost').style.display = '';
   $('coopCode').textContent = NET.code;
-  coopStatus('жду напарника по коду ' + NET.code + '…');
+  coopStatus('код в эфире — жду напарника…');
   wsConnect('h', NET.code);
 };
 $('coopJoinB').onclick = () => {
@@ -4275,7 +4253,7 @@ $('coopJoinB').onclick = () => {
 $('coopGoB').onclick = () => {
   const code = ($('coopCodeIn').value || '').trim().toUpperCase();
   if (code.length < 3) { coopStatus('введи код'); return; }
-  coopStatus('ищу комнату ' + code + '…');
+  coopStatus('ищу комнату…');
   wsConnect('g', code);
 };
 $('coopShareB').onclick = () => {
@@ -4290,7 +4268,7 @@ $('coopShareB').onclick = () => {
   }
 };
 $('coopStartB').onclick = () => {
-  if (NET.verBad) { coopStatus('✗ версии разные — сначала обновите страницы'); return; }
+  if (NET.verBad) { coopStatus('сначала обоим обновить страницу'); return; }
   SAVE.sector = 0;
   NET.ally = { x: 70, y: 0, r: 13, hp: 100, maxHp: 100, flip: false, mov: false, wt: 0, hurtT: 0 };
   netSend(NET.dcR, { t: 'go' });
