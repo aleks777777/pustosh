@@ -145,6 +145,12 @@ html,body{overscroll-behavior:none}
 #timer{top:calc(12px + env(safe-area-inset-top,0px))}
 #bossbar{top:calc(44px + env(safe-area-inset-top,0px))}
 #radio{left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px))}
+.nettx{width:100%;height:62px;background:#0c0a07;border:1px solid rgba(232,220,196,.3);color:var(--dim);
+  font-family:inherit;font-size:9px;margin:6px 0;pointer-events:auto;resize:none}
+.netin{width:170px;background:#0c0a07;border:1px solid rgba(159,220,60,.5);color:var(--acid);
+  font-family:inherit;font-size:24px;letter-spacing:.3em;text-align:center;padding:9px;pointer-events:auto}
+.netdet{margin-top:16px;font-size:10px}
+.netdet summary{color:var(--cy);cursor:pointer;letter-spacing:.14em}
 .char{pointer-events:auto;flex:1;font-family:inherit;cursor:pointer;text-align:left;
   background:rgba(232,220,196,.05);border:1px solid rgba(232,220,196,.25);color:var(--ink);padding:10px 10px 9px}
 .char b{display:block;font-size:11.5px;letter-spacing:.14em;margin-bottom:4px}
@@ -213,6 +219,7 @@ html,body{overscroll-behavior:none}
     Выходи на вылазку, резчик. Оружие стреляет само — твоё дело выжить и вернуться со скрапом.</p>
     <div class="metaline" id="metaline"></div>
     <button id="startB" class="big">▶ НА ВЫЛАЗКУ</button>
+    <button id="coopB" class="ghost" style="margin-top:10px">⇆ КООП-РЕЙД</button>
     <div class="btnrow">
       <button id="shopOpenB" class="ghost">⚙ СХРОН</button>
       <button id="codexOpenB" class="ghost icobtn" title="Журнал">✎</button>
@@ -261,6 +268,56 @@ html,body{overscroll-behavior:none}
     <h2>ЧЁРНЫЙ СПИСОК</h2>
     <div id="banList" class="scrolly"></div>
     <button id="banCancelB" class="ghost" style="margin-top:12px">ОТМЕНА</button>
+  </div>
+</div>
+
+<!-- КООП -->
+<div id="coop" class="ov hidden">
+  <div class="panel">
+    <div class="eyebrow">кооп-рейд · p2p напрямую, без сервера · сектор 07</div>
+    <h2>КООП</h2>
+    <div id="coopStatus" class="metaline">выбери роль</div>
+    <div id="coopPick">
+      <button id="coopHostB" class="big">СОЗДАТЬ КОМНАТУ</button>
+      <button id="coopJoinB" class="big" style="margin-top:10px">ПРИСОЕДИНИТЬСЯ</button>
+    </div>
+    <div id="coopHost" style="display:none">
+      <div class="sech">КОД КОМНАТЫ</div>
+      <div id="coopCode" style="font-size:34px;letter-spacing:.3em;color:var(--acid);margin:8px 0 14px"></div>
+      <button id="coopStartB" class="big" style="display:none">▶ В БОЙ</button>
+      <details class="netdet"><summary>ручной обмен — если код не сработал</summary>
+        <div class="sech">1 · СКОПИРУЙ И ОТПРАВЬ НАПАРНИКУ</div>
+        <textarea id="coopOfferTxt" class="nettx" readonly></textarea>
+        <button id="coopCopyOfferB" class="ghost">КОПИРОВАТЬ</button>
+        <div class="sech">2 · ВСТАВЬ ЕГО ОТВЕТ</div>
+        <textarea id="coopAnsIn" class="nettx"></textarea>
+        <button id="coopManApplyB" class="ghost">ПРИМЕНИТЬ</button>
+      </details>
+    </div>
+    <div id="coopJoin" style="display:none">
+      <div class="sech">КОД КОМНАТЫ ХОСТА</div>
+      <input id="coopCodeIn" class="netin" maxlength="6" placeholder="X7K2" autocomplete="off"/>
+      <button id="coopGoB" class="big" style="margin-top:10px">ПОДКЛЮЧИТЬСЯ</button>
+      <details class="netdet"><summary>ручной обмен — если код не сработал</summary>
+        <div class="sech">1 · ВСТАВЬ ОФФЕР ХОСТА</div>
+        <textarea id="coopOfferIn" class="nettx"></textarea>
+        <button id="coopManOfferB" class="ghost">СОЗДАТЬ ОТВЕТ</button>
+        <div class="sech">2 · СКОПИРУЙ ОТВЕТ И ОТПРАВЬ ХОСТУ</div>
+        <textarea id="coopAnsOut" class="nettx" readonly></textarea>
+        <button id="coopCopyAnsB" class="ghost">КОПИРОВАТЬ</button>
+      </details>
+    </div>
+    <div class="btnrow"><button id="coopBackB" class="ghost">НАЗАД</button></div>
+  </div>
+</div>
+<div id="coopLvl" style="display:none;position:fixed;top:30%;left:0;right:0;text-align:center;z-index:30;
+  color:var(--gold);letter-spacing:.3em;font-size:13px;text-shadow:0 0 12px rgba(224,178,58,.5)">ХОСТ ВЫБИРАЕТ УЛУЧШЕНИЕ…</div>
+<div id="coopEnd" class="ov hidden">
+  <div class="panel">
+    <div class="eyebrow">рейд окончен</div>
+    <h2 id="coopEndH">КОНЕЦ</h2>
+    <div id="coopEndTxt" class="metaline"></div>
+    <button id="coopEndB" class="big">В СХРОН</button>
   </div>
 </div>
 
@@ -598,6 +655,7 @@ let radioT = 0, radioCool = 0, radioIdleT = 40, radioMsg = '', radioChars = 0;
 const radioQ = [];
 let radioFlags = {};
 function radioSay(msg, urgent) {
+  if (NET.role === 'host' && NET.ready) netSend(NET.dcR, { t: 'ev', k: 'rad', m: msg });
   if (radioQ.length > 3) radioQ.length = 3;
   if (urgent) { radioQ.unshift(msg); radioCool = 0; }
   else radioQ.push(msg);
@@ -606,6 +664,392 @@ function radioOnce(key, msg, urgent) {
   if (radioFlags[key]) return;
   radioFlags[key] = true;
   radioSay(msg, urgent);
+}
+
+/* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
+const NET = { role: null, ready: false, pc: null, dcR: null, dcU: null, code: '',
+  ping: 0, ally: null, eid: 1, gEn: {}, sendT: 0, pingT: 0, auraT: 0, lastHp: 999 };
+function netSend(ch, obj) {
+  try { if (ch && ch.readyState === 'open') ch.send(JSON.stringify(obj)); } catch (e) {}
+}
+function roomCode() {
+  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 4; i++) s += A[irnd(0, A.length - 1)];
+  return s;
+}
+function netMakePC() {
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] });
+  NET.pc = pc;
+  pc.onconnectionstatechange = () => {
+    if (['failed', 'disconnected', 'closed'].indexOf(pc.connectionState) >= 0) netDrop();
+  };
+  return pc;
+}
+function netIceDone(pc) {
+  return new Promise(res => {
+    if (pc.iceGatheringState === 'complete') return res();
+    const t = setTimeout(res, 4000);
+    pc.onicegatheringstatechange = () => {
+      if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); }
+    };
+  });
+}
+function netWire(dc) {
+  dc.onopen = () => {
+    if (NET.dcR && NET.dcR.readyState === 'open' && NET.dcU && NET.dcU.readyState === 'open') netReady();
+  };
+  dc.onmessage = ev => netOnMsg(ev.data);
+  dc.onclose = () => netDrop();
+}
+const b64e = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+const b64d = s => JSON.parse(decodeURIComponent(escape(atob(s.trim()))));
+async function netHostStart() {
+  const pc = netMakePC();
+  NET.dcR = pc.createDataChannel('r');
+  NET.dcU = pc.createDataChannel('u', { ordered: false, maxRetransmits: 0 });
+  netWire(NET.dcR); netWire(NET.dcU);
+  await pc.setLocalDescription(await pc.createOffer());
+  await netIceDone(pc);
+  return b64e(pc.localDescription);
+}
+async function netGuestAnswer(offerB64) {
+  const pc = netMakePC();
+  pc.ondatachannel = ev => {
+    if (ev.channel.label === 'r') NET.dcR = ev.channel; else NET.dcU = ev.channel;
+    netWire(ev.channel);
+  };
+  await pc.setRemoteDescription(b64d(offerB64));
+  await pc.setLocalDescription(await pc.createAnswer());
+  await netIceDone(pc);
+  return b64e(pc.localDescription);
+}
+async function netHostAccept(ansB64) { await NET.pc.setRemoteDescription(b64d(ansB64)); }
+
+/* мини-клиент MQTT 3.1.1 поверх WebSocket — только для обмена визитками */
+const MQ = {
+  urls: ['wss://broker.emqx.io:8084/mqtt', 'wss://test.mosquitto.org:8081'],
+  ws: null, alive: null,
+  str(s) { const b = new TextEncoder().encode(s); const o = new Uint8Array(b.length + 2); o[0] = b.length >> 8; o[1] = b.length & 255; o.set(b, 2); return o; },
+  varlen(n) { const o = []; do { let d = n % 128; n = Math.floor(n / 128); if (n) d |= 128; o.push(d); } while (n); return new Uint8Array(o); },
+  pkt(type, ...parts) {
+    let len = 0; parts.forEach(p => len += p.length);
+    const vl = this.varlen(len);
+    const o = new Uint8Array(1 + vl.length + len);
+    o[0] = type; o.set(vl, 1);
+    let at = 1 + vl.length;
+    parts.forEach(p => { o.set(p, at); at += p.length; });
+    return o;
+  },
+  connect(onReady, onPub, onFail) {
+    let i = 0;
+    const tryUrl = () => {
+      if (i >= this.urls.length) { onFail && onFail(); return; }
+      let ws;
+      try { ws = new WebSocket(this.urls[i++], 'mqtt'); } catch (e) { tryUrl(); return; }
+      ws.binaryType = 'arraybuffer';
+      let ok = false;
+      const to = setTimeout(() => { if (!ok) { try { ws.close(); } catch (e) {} tryUrl(); } }, 6000);
+      ws.onopen = () => {
+        const cid = 'pust' + Math.random().toString(36).slice(2, 10);
+        ws.send(this.pkt(0x10, this.str('MQTT'), new Uint8Array([4, 2, 0, 60]), this.str(cid)));
+      };
+      ws.onmessage = ev => {
+        const d = new Uint8Array(ev.data);
+        const t = d[0] >> 4;
+        if (t === 2) {
+          ok = true; clearTimeout(to); this.ws = ws;
+          this.alive = setInterval(() => { try { ws.send(new Uint8Array([0xC0, 0])); } catch (e) {} }, 25000);
+          onReady();
+        } else if (t === 3) {
+          let at = 1, mult = 1, len = 0, b;
+          do { b = d[at++]; len += (b & 127) * mult; mult *= 128; } while (b & 128);
+          const end = at + len;
+          const tl = (d[at] << 8) | d[at + 1];
+          const topic = new TextDecoder().decode(d.slice(at + 2, at + 2 + tl));
+          const payload = new TextDecoder().decode(d.slice(at + 2 + tl, end));
+          onPub(topic, payload);
+        }
+      };
+      ws.onerror = () => { if (!ok) { clearTimeout(to); tryUrl(); } };
+    };
+    tryUrl();
+  },
+  sub(topic) {
+    const t = this.str(topic);
+    const o = new Uint8Array(t.length + 3);
+    o[0] = 0; o[1] = 1; o.set(t, 2); o[t.length + 2] = 0;
+    this.ws.send(this.pkt(0x82, o));
+  },
+  pub(topic, msg, retain) {
+    this.ws.send(this.pkt(retain ? 0x31 : 0x30, this.str(topic), new TextEncoder().encode(msg)));
+  },
+  stop() {
+    if (this.alive) clearInterval(this.alive);
+    try { if (this.ws) this.ws.close(); } catch (e) {}
+    this.ws = null; this.alive = null;
+  }
+};
+
+function netReady() {
+  if (NET.ready) return;
+  NET.ready = true;
+  MQ.stop();
+  NET.lastHp = 999;
+  try { SFX.evolve(); } catch (e) {}
+  if (NET.role === 'host') {
+    coopStatus('СВЯЗЬ УСТАНОВЛЕНА · жми В БОЙ');
+    $('coopStartB').style.display = '';
+  } else coopStatus('СВЯЗЬ УСТАНОВЛЕНА · хост запускает рейд…');
+}
+function coopStatus(m) { $('coopStatus').textContent = m; }
+function netDrop() {
+  if (!NET.role) return;
+  const wasGuestInRun = NET.role === 'guest' && state === 'play';
+  const wasHostInRun = NET.role === 'host' && NET.ready && state === 'play';
+  try { netSend(NET.dcR, { t: 'bye' }); } catch (e) {}
+  try { if (NET.pc) NET.pc.close(); } catch (e) {}
+  MQ.stop();
+  NET.role = null; NET.ready = false; NET.pc = NET.dcR = NET.dcU = null;
+  NET.ally = null; NET.gEn = {};
+  $('coopLvl').style.display = 'none';
+  $('coopStartB').style.display = 'none';
+  if (wasHostInRun) announce('СВЯЗЬ ПОТЕРЯНА — ДОБИВАЙ САМ');
+  if (wasGuestInRun) {
+    state = 'menu';
+    document.body.classList.remove('ingame');
+    ['over', 'victory', 'levelup', 'paused', 'logov', 'coopEnd'].forEach(hide);
+    show('start');
+    renderMenu();
+    announce('');
+  }
+}
+/* снапшот мира: хост → гость, 20 Гц */
+const TIDX = { runner: 0, swarm: 1, brute: 2, spit: 3, elite: 4, boss: 5 };
+const TNAME = ['runner', 'swarm', 'brute', 'spit', 'elite', 'boss'];
+const TRAD = [11, 7.5, 20, 12, 30, 52];
+function buildSnap() {
+  const vx0 = cam.x - 60, vx1 = cam.x + W + 60, vy0 = cam.y - 60, vy1 = cam.y + H + 60;
+  const en = [];
+  for (const e of enemies) {
+    if (e.x < vx0 || e.x > vx1 || e.y < vy0 || e.y > vy1) continue;
+    if (en.length >= 130) break;
+    en.push([e.id | 0, TIDX[e.t] | 0, Math.round(e.x), Math.round(e.y),
+      Math.max(1, Math.round(e.hp / e.mhp * 100)), e.hitT > 0 ? 1 : 0,
+      e.t === 'spit' && e.shT < 0.6 ? 1 : 0]);
+  }
+  const bu = [];
+  for (const b of bullets) { if (bu.length >= 90) break; bu.push([Math.round(b.x), Math.round(b.y)]); }
+  const gm = [];
+  for (const g of gems) { if (gm.length >= 60) break; gm.push([Math.round(g.x), Math.round(g.y), g.v > 3 ? 1 : 0]); }
+  const be = enemies.find(e => e.t === 'boss');
+  return { t: 's',
+    p: [Math.round(player.x), Math.round(player.y), player.fx < -0.05 ? 1 : 0, player.mov ? 1 : 0,
+      Math.round(player.hp), Math.round(player.maxHp)],
+    a: [Math.round(NET.ally.hp), Math.round(NET.ally.maxHp)],
+    tm: Math.round(time * 10) / 10, kl: kills, sc: Math.round(runScrap),
+    lv: player.lvl, xp: Math.round(player.xp / player.xpNext * 100),
+    bs: be ? Math.round(be.hp / be.mhp * 100) : -1, pg: NET.ping, en, bu, gm };
+}
+function netApplySnap(s) {
+  time = s.tm;
+  kills = s.kl; runScrap = s.sc;
+  player.lvl = s.lv; player.xp = s.xp; player.xpNext = 100;
+  player.hp = s.a[0]; player.maxHp = s.a[1];
+  if (s.a[0] < NET.lastHp && state === 'play') {
+    player.hurtT = 0.35; shake = Math.min(15, shake + 6);
+    try { SFX.hurt(); } catch (e) {}
+  }
+  NET.lastHp = s.a[0];
+  const A = NET.ally;
+  if (A) {
+    A.tx = s.p[0]; A.ty = s.p[1]; A.flip = !!s.p[2]; A.mov = !!s.p[3];
+    A.hp = s.p[4]; A.maxHp = s.p[5];
+  }
+  NET.ping = s.pg;
+  const seen = {};
+  const list = [];
+  for (const row of s.en) {
+    const id = row[0], ti = row[1];
+    let ge = NET.gEn[id];
+    if (!ge) ge = { id, t: TNAME[ti], kind: ti === 5 ? 'gardener' : undefined, r: TRAD[ti],
+      x: row[2], y: row[3], wob: Math.random() * 6, hitT: 0, shT: 2, mode: 'idle', teleT: 0,
+      dashT: 5, atk: 0, dcd: 0, satk: 0, dmg: 0, col: '#8fb43a', col2: '#4c611e' };
+    ge.tx = row[2]; ge.ty = row[3];
+    ge.hp = row[4]; ge.mhp = 100;
+    if (row[5]) ge.hitT = 0.1;
+    ge.shT = row[6] ? 0.3 : 2;
+    seen[id] = ge; list.push(ge);
+  }
+  NET.gEn = seen;
+  enemies.length = 0;
+  list.forEach(e => enemies.push(e));
+  bossActive = s.bs >= 0;
+  bullets.length = 0;
+  for (const b of s.bu) bullets.push({ x: b[0], y: b[1], vx: 0, vy: 0, r: 3, col: '#ffd77a' });
+  gems.length = 0;
+  for (const g of s.gm) gems.push({ x: g[0], y: g[1], v: g[2] ? 5 : 1 });
+}
+function netOnMsg(raw) {
+  let m; try { m = JSON.parse(raw); } catch (e) { return; }
+  if (m.t === 'pi') { netSend(NET.dcR, { t: 'po', ts: m.ts }); return; }
+  if (m.t === 'po') { NET.ping = Math.round(performance.now() - m.ts); return; }
+  if (m.t === 'bye') { netDrop(); return; }
+  if (NET.role === 'host') {
+    if (m.t === 'i' && NET.ally) {
+      NET.ally.x += (m.x - NET.ally.x) * 0.6;
+      NET.ally.y += (m.y - NET.ally.y) * 0.6;
+      NET.ally.flip = !!m.fx; NET.ally.mov = !!m.mv;
+    }
+    return;
+  }
+  if (m.t === 's') { if (state === 'play') netApplySnap(m); return; }
+  if (m.t === 'go') { guestGo(); return; }
+  if (m.t === 'ev') {
+    if (m.k === 'ann') announce(m.m);
+    else if (m.k === 'rad') radioSay(m.m);
+    else if (m.k === 'kl') {
+      const key = m.ti === 5 ? 'gardener' : TNAME[m.ti];
+      gibSprite(key, 0, m.x, m.y, m.r, m.ti >= 4);
+      burst(m.x, m.y, '#8fb43a', 8);
+      if (decals.length > 120) decals.shift();
+      decals.push({ x: m.x, y: m.y, r: m.r, col: '#8fb43a', t: 9, seed: irnd(1, 999) });
+    }
+    else if (m.k === 'lvo') $('coopLvl').style.display = '';
+    else if (m.k === 'lvc') $('coopLvl').style.display = 'none';
+    else if (m.k === 'over') guestEnd(false);
+    else if (m.k === 'win') guestEnd(true);
+  }
+}
+function guestGo() {
+  NET.gEn = {};
+  NET.ally = { x: -70, y: 0, r: 13, hp: 100, maxHp: 100, flip: false, mov: false, wt: 0, hurtT: 0 };
+  SAVE.sector = 0;
+  hide('coop');
+  startRun();
+  player.x = 70; player.y = 0;
+}
+function guestEnd(win) {
+  const g = Math.round(runScrap);
+  SAVE.scrap += g; SAVE.runs++;
+  saveGame();
+  state = 'over';
+  MUS.setIntensity(0);
+  document.body.classList.remove('ingame');
+  $('coopEndH').textContent = win ? 'КУПОЛ ПАЛ' : 'РЕЙД ОКОНЧЕН';
+  $('coopEndTxt').textContent = 'выжито ' + fmt(time) + ' · +' + g + ' ⚙ в Схрон';
+  show('coopEnd');
+  setTimeout(() => netDrop(), 400);
+}
+/* хост: сетевой тик — снапшоты, пинг, урон напарнику, его резак */
+function updateHostNet(dt) {
+  const A = NET.ally;
+  if (!A) return;
+  A.hurtT = Math.max(0, (A.hurtT || 0) - dt);
+  if (A.mov) A.wt = (A.wt || 0) + dt;
+  // резак напарника: постоянная зона урона вокруг него
+  NET.auraT -= dt;
+  if (NET.auraT <= 0) {
+    NET.auraT = 0.25;
+    for (const e of enemies) {
+      if (e.t === 'boss') continue;
+      if (d2(e.x, e.y, A.x, A.y) < 78 * 78) { e.hp -= 5; e.hitT = 0.1; }
+    }
+  }
+  if (A.hp <= 0 && !NET.allyDown) {
+    NET.allyDown = true;
+    announce('НАПАРНИК ПАЛ');
+    gibSprite('player', 0, A.x, A.y, 13, true);
+    gameOver();
+    return;
+  }
+  NET.sendT -= dt;
+  if (NET.sendT <= 0) {
+    NET.sendT = 0.05;
+    netSend(NET.dcU, buildSnap());
+  }
+  NET.pingT -= dt;
+  if (NET.pingT <= 0) {
+    NET.pingT = 2;
+    netSend(NET.dcR, { t: 'pi', ts: performance.now() });
+  }
+}
+/* гость: локальное движение + сглаживание мира из снапшотов */
+function updateGuest(dt) {
+  let mx = 0, my = 0;
+  if (keys.KeyW || keys.ArrowUp) my -= 1;
+  if (keys.KeyS || keys.ArrowDown) my += 1;
+  if (keys.KeyA || keys.ArrowLeft) mx -= 1;
+  if (keys.KeyD || keys.ArrowRight) mx += 1;
+  if (joy.active) { mx += joy.dx / 48; my += joy.dy / 48; }
+  const ml = Math.hypot(mx, my);
+  if (ml > 0.05) {
+    const s = Math.min(1, ml);
+    player.x += mx / ml * 165 * s * dt;
+    player.y += my / ml * 165 * s * dt;
+    player.fx = mx / ml; player.fy = my / ml;
+  }
+  player.mov = ml > 0.05;
+  if (player.mov) player.wt += dt;
+  player.hurtT = Math.max(0, player.hurtT - dt);
+  const A = NET.ally;
+  if (A) {
+    const ddx = player.x - A.x, ddy = player.y - A.y;
+    const dd = Math.hypot(ddx, ddy) || 1;
+    if (dd > 420) { player.x = A.x + ddx / dd * 420; player.y = A.y + ddy / dd * 420; }
+    const sm = Math.min(1, dt * 12);
+    if (A.tx !== undefined) { A.x += (A.tx - A.x) * sm; A.y += (A.ty - A.y) * sm; }
+    A.hurtT = Math.max(0, (A.hurtT || 0) - dt);
+    if (A.mov) A.wt = (A.wt || 0) + dt;
+  }
+  const sm2 = Math.min(1, dt * 12);
+  for (const e of enemies) {
+    if (e.tx !== undefined) { e.x += (e.tx - e.x) * sm2; e.y += (e.ty - e.y) * sm2; }
+    e.wob += dt * 4;
+    e.hitT = Math.max(0, e.hitT - dt);
+    e.shT -= dt;
+  }
+  NET.sendT -= dt;
+  if (NET.sendT <= 0) {
+    NET.sendT = 0.033;
+    netSend(NET.dcU, { t: 'i', x: Math.round(player.x), y: Math.round(player.y),
+      fx: player.fx < -0.05 ? 1 : 0, mv: player.mov ? 1 : 0 });
+  }
+  // локальные эффекты
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.t -= dt;
+    if (p.t <= 0) { parts.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= 0.92; p.vy *= 0.92;
+  }
+  for (let i = gibs.length - 1; i >= 0; i--) {
+    const g = gibs[i];
+    g.t -= dt;
+    if (g.t <= 0) { gibs.splice(i, 1); continue; }
+    g.x += g.vx * dt; g.y += g.vy * dt;
+    g.vy += 430 * dt; g.vx *= 0.98;
+    g.rot += g.vr * dt;
+  }
+  for (let i = decals.length - 1; i >= 0; i--) { decals[i].t -= dt; if (decals[i].t <= 0) decals.splice(i, 1); }
+  for (let i = rings.length - 1; i >= 0; i--) { rings[i].t -= dt; if (rings[i].t <= 0) rings.splice(i, 1); }
+  shake = Math.max(0, shake - dt * 40);
+  // рация
+  radioCool -= dt;
+  if (radioT > 0) {
+    radioT -= dt;
+    radioChars = Math.min(radioMsg.length, radioChars + dt * 38);
+    $('radioTxt').textContent = radioMsg.slice(0, Math.ceil(radioChars));
+    if (radioT <= 0) $('radio').classList.remove('on');
+  } else if (radioQ.length && radioCool <= 0) {
+    radioMsg = radioQ.shift();
+    radioChars = 0;
+    radioT = 3.2 + radioMsg.length * 0.03;
+    radioCool = radioT + 6;
+    $('radio').classList.add('on');
+    SFX.radio();
+  }
+  updateHUD();
 }
 
 /* ПУСТОШЬ — спрайты как код. '.' = прозрачно, буква = цвет из pal. */
@@ -1088,6 +1532,8 @@ function bakeAll() {
   };
   mk('player', 2); mk('runner', 2); mk('swarm', 2); mk('brute', 2);
   mk('spit', 2); mk('elite', 3); mk('gardener', 4); mk('bloom', 4); mk('surv', 2);
+  SPRC.player2 = SPR.player.frames.map(f => bakeSprite(f, SPR.player.pal, 2,
+    { B: '#a9c9cb', D: '#7f9ea0', C: '#e0b23a', R: '#5d8a8d' }));
   SPRC.rock = [bakeSprite(SPR.rock.frames[0], SPR.rock.pal, 4)];
   SPRC.vein = [bakeSprite(SPR.vein.frames[0], SPR.vein.pal, 4)];
   SPRC.gem2 = [bakeSprite(SPR.gem.frames[0], SPR.gem.pal, 2)];
@@ -1666,9 +2112,14 @@ function openLevelUp() {
 }
 function closeLevelUp() {
   hide('levelup');
-  if (player.xp >= player.xpNext) lvlUp(); else state = 'play';
+  if (player.xp >= player.xpNext) lvlUp();
+  else {
+    state = 'play';
+    if (NET.role === 'host' && NET.ready) netSend(NET.dcR, { t: 'ev', k: 'lvc' });
+  }
 }
 function lvlUp() {
+  if (NET.role === 'host' && NET.ready) netSend(NET.dcR, { t: 'ev', k: 'lvo' });
   player.lvl++;
   player.xp -= player.xpNext;
   player.xpNext = Math.floor(6 + player.lvl * 4 + Math.pow(player.lvl, 1.65));
@@ -1792,7 +2243,7 @@ function spawn(type, px, py) {
     r: t.r, hp: hp, mhp: hp, spd: t.spd * (type === 'boss' ? 1 : 1 + time / 650),
     dmg: type === 'boss' ? t.dmg : Math.round(t.dmg * S.dmgM),
     xp: t.xp, col: pal ? pal[0] : t.col, col2: pal ? pal[1] : t.col2,
-    atk: 0, dcd: 0, hitT: 0, wob: rnd(TAU), shT: rnd(1, 2.5), satk: 0,
+    id: NET.eid++, atk: 0, dcd: 0, hitT: 0, wob: rnd(TAU), shT: rnd(1, 2.5), satk: 0,
     mode: 'idle', dashT: 5, teleT: 0, sumT: 8, vx: 0, vy: 0
   });
   if (type === 'boss') {
@@ -1849,6 +2300,8 @@ function killEnemy(e, i) {
   if (Math.random() < 0.34) { addScrap(1); }
   burst(e.x, e.y, e.col, e.t === 'elite' || e.t === 'boss' ? 24 : irnd(6, 10));
   gibSprite(sprKeyFor(e), 0, e.x, e.y, e.r, e.t === 'elite' || e.t === 'boss');
+  if (NET.role === 'host' && NET.ready)
+    netSend(NET.dcU, { t: 'ev', k: 'kl', x: Math.round(e.x), y: Math.round(e.y), r: e.r, ti: TIDX[e.t] });
   if (e.t !== 'boss') {
     if (decals.length > 120) decals.shift();
     decals.push({ x: e.x, y: e.y, r: e.r, col: e.col, t: 9, seed: irnd(1, 999) });
@@ -1891,6 +2344,7 @@ function dmgText(x, y, v, col, big) {
   texts.push({ x: x + rnd(-6, 6), y: y - 8, v: String(v), col, t: 0.7, big: !!big });
 }
 function announce(msg) {
+  if (NET.role === 'host' && NET.ready) netSend(NET.dcR, { t: 'ev', k: 'ann', m: msg });
   const a = $('announce');
   a.textContent = msg;
   a.classList.remove('show');
@@ -1968,6 +2422,10 @@ function gameOver() {
   $('bossbar').classList.remove('on');
   show('over');
   MUS.setIntensity(0);
+  if (NET.role === 'host' && NET.ready) {
+    netSend(NET.dcR, { t: 'ev', k: 'over' });
+    setTimeout(() => netDrop(), 500);
+  }
   SFX.die();
 }
 function victory() {
@@ -1991,6 +2449,10 @@ function victory() {
   $('bossbar').classList.remove('on');
   show('victory');
   MUS.setIntensity(0);
+  if (NET.role === 'host' && NET.ready) {
+    netSend(NET.dcR, { t: 'ev', k: 'win' });
+    setTimeout(() => netDrop(), 500);
+  }
   SFX.win();
 }
 
@@ -2258,6 +2720,7 @@ function weapons(dt) {
 
 /* ================= обновление ================= */
 function update(dt) {
+  if (NET.role === 'guest' && NET.ready) { updateGuest(dt); return; }
   time += dt;
   const min = Math.floor(time / 60);
   if (min > lastMinute) {
@@ -2293,6 +2756,7 @@ function update(dt) {
     radioIdleT = rnd(45, 75);
     if (!radioQ.length && radioT <= 0) radioSay(rp(RADIO.idle));
   }
+  if (NET.role === 'host' && NET.ready) updateHostNet(dt);
   // выживший
   if (!surv && time >= survAt && time < 480 && !bossActive) spawnSurvivor();
   if (surv) updateSurvivor(dt);
@@ -2323,6 +2787,11 @@ function update(dt) {
   player.hurtT = Math.max(0, player.hurtT - dt);
   cutFxT -= dt;
   collideRocks(player, true, 55, dt);
+  if (NET.ready && NET.role === 'host' && NET.ally) {
+    const tdx = player.x - NET.ally.x, tdy = player.y - NET.ally.y;
+    const td = Math.hypot(tdx, tdy) || 1;
+    if (td > 420) { player.x = NET.ally.x + tdx / td * 420; player.y = NET.ally.y + tdy / td * 420; }
+  }
 
   spawner(dt);
   weapons(dt);
@@ -2403,7 +2872,9 @@ function update(dt) {
 
   // враги
   for (const e of enemies) {
-    const dx = player.x - e.x, dy = player.y - e.y;
+    const tp = (NET.ready && NET.role === 'host' && NET.ally && NET.ally.hp > 0 &&
+      d2(NET.ally.x, NET.ally.y, e.x, e.y) < d2(player.x, player.y, e.x, e.y)) ? NET.ally : player;
+    const dx = tp.x - e.x, dy = tp.y - e.y;
     const d = Math.hypot(dx, dy) || 1;
     e.wob += dt * 4;
     e.atk -= dt; e.dcd -= dt; e.satk -= dt; e.hitT = Math.max(0, e.hitT - dt);
@@ -2474,7 +2945,14 @@ function update(dt) {
       if (e.t === 'boss') smashRocks(e);
       else collideRocks(e, false, e.t === 'brute' ? 35 : e.t === 'elite' ? 45 : 12, dt);
     }
-    if (d < e.r + player.r + 2 && e.atk <= 0) { e.atk = 0.75; damagePlayer(e.dmg); }
+    const dP = tp === player ? d : Math.hypot(player.x - e.x, player.y - e.y);
+    if (dP < e.r + player.r + 2 && e.atk <= 0) { e.atk = 0.75; damagePlayer(e.dmg); }
+    if (NET.ready && NET.role === 'host' && NET.ally && NET.ally.hp > 0 && e.satk <= 0 &&
+        d2(e.x, e.y, NET.ally.x, NET.ally.y) < (e.r + 15) * (e.r + 15)) {
+      e.satk = 0.75;
+      NET.ally.hp = Math.max(0, NET.ally.hp - e.dmg);
+      NET.ally.hurtT = 0.35;
+    }
     if (surv && e.satk <= 0 && d2(e.x, e.y, surv.x, surv.y) < (e.r + 12) * (e.r + 12)) {
       e.satk = 0.9;
       surv.hp -= Math.max(1, Math.round(e.dmg * 0.6));
@@ -2674,8 +3152,8 @@ function draw() {
   ctx.fillStyle = S.bg;
   ctx.fillRect(0, 0, W, H);
 
-  cam.x = player.x - W / 2 + rnd(-shake, shake);
-  cam.y = player.y - H / 2 + rnd(-shake, shake);
+  cam.x = ((NET.ready && NET.ally) ? (player.x + NET.ally.x) / 2 : player.x) - W / 2 + rnd(-shake, shake);
+  cam.y = ((NET.ready && NET.ally) ? (player.y + NET.ally.y) / 2 : player.y) - H / 2 + rnd(-shake, shake);
   ctx.save();
   ctx.translate(-cam.x, -cam.y);
 
@@ -3003,6 +3481,21 @@ function draw() {
     drawSpr(SPRC.player, pfi, player.x, player.y, player.r, pflip);
     if (player.hurtT > 0 && Math.floor(time * 16) % 2 === 0)
       drawSpr(SPRC.player_f, pfi, player.x, player.y, player.r, pflip, 0.7);
+  }
+
+  // напарник (кооп)
+  if (NET.ready && NET.ally && NET.ally.hp > 0) {
+    const A = NET.ally;
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath(); ctx.ellipse(A.x, A.y + 11, 11, 5, 0, 0, TAU); ctx.fill();
+    const afi = A.mov ? Math.floor((A.wt || 0) * 5) % 2 : 0;
+    drawSpr(SPRC.player2, afi, A.x, A.y, 13, !!A.flip);
+    if (A.hurtT > 0 && Math.floor(time * 16) % 2 === 0)
+      drawSpr(SPRC.player_f, afi, A.x, A.y, 13, !!A.flip, 0.7);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(A.x - 15, A.y - 27, 30, 4);
+    ctx.fillStyle = '#6ec3c9';
+    ctx.fillRect(A.x - 15, A.y - 27, 30 * clamp(A.hp / A.maxHp, 0, 1), 4);
   }
 
   // вспышки стволов
@@ -3546,6 +4039,7 @@ function startRun() {
   MUS.setSector();
   MUS.setIntensity(1);
   radioSay(rp(SAVE.sector === 1 ? RADIO.start.concat(RADIO.start8) : RADIO.start));
+  if (NET.ready) { survAt = 1e9; NET.allyDown = false; }
   let supCost = 0;
   SUPPLIES.forEach(s => {
     if (!sup[s.id]) return;
@@ -3571,6 +4065,91 @@ $('startB').onclick = () => { audioInit(); state = 'brief'; renderBrief(); hide(
 $('deployB').onclick = () => startRun();
 $('briefBackB').onclick = () => { state = 'menu'; renderMenu(); hide('brief'); show('start'); };
 $('againB').onclick = startRun;
+$('coopB').onclick = () => {
+  audioInit();
+  hide('start'); show('coop');
+  $('coopPick').style.display = '';
+  $('coopHost').style.display = 'none';
+  $('coopJoin').style.display = 'none';
+  coopStatus('выбери роль');
+};
+$('coopBackB').onclick = () => { netDrop(); hide('coop'); show('start'); renderMenu(); };
+$('coopHostB').onclick = async () => {
+  NET.role = 'host';
+  NET.code = roomCode();
+  $('coopPick').style.display = 'none';
+  $('coopHost').style.display = '';
+  $('coopCode').textContent = NET.code;
+  coopStatus('готовлю канал…');
+  let offer;
+  try { offer = await netHostStart(); } catch (e) { coopStatus('WebRTC недоступен: ' + e.message); return; }
+  $('coopOfferTxt').value = offer;
+  coopStatus('жду напарника по коду ' + NET.code + '…');
+  MQ.connect(() => {
+    MQ.sub('pustosh7/' + NET.code + '/a');
+    MQ.pub('pustosh7/' + NET.code + '/o', offer, true);
+  }, async (topic, payload) => {
+    if (topic.slice(-2) === '/a') {
+      coopStatus('ответ получен, соединяю…');
+      try { await netHostAccept(payload); } catch (e) { coopStatus('битый ответ, пробуй ручной обмен'); }
+    }
+  }, () => coopStatus('эфир занят — используй ручной обмен ниже'));
+};
+$('coopJoinB').onclick = () => {
+  NET.role = 'guest';
+  $('coopPick').style.display = 'none';
+  $('coopJoin').style.display = '';
+  coopStatus('введи код комнаты');
+};
+$('coopGoB').onclick = () => {
+  const code = ($('coopCodeIn').value || '').trim().toUpperCase();
+  if (code.length < 3) { coopStatus('введи код'); return; }
+  coopStatus('ищу комнату ' + code + '…');
+  MQ.connect(() => {
+    MQ.sub('pustosh7/' + code + '/o');
+  }, async (topic, payload) => {
+    if (topic.slice(-2) === '/o') {
+      coopStatus('комната найдена, соединяю…');
+      try {
+        const ans = await netGuestAnswer(payload);
+        MQ.pub('pustosh7/' + code + '/a', ans, false);
+        coopStatus('рукопожатие…');
+      } catch (e) { coopStatus('ошибка соединения: ' + e.message); }
+    }
+  }, () => coopStatus('эфир занят — используй ручной обмен ниже'));
+};
+$('coopManApplyB').onclick = async () => {
+  try { await netHostAccept($('coopAnsIn').value); coopStatus('соединяю…'); }
+  catch (e) { coopStatus('битый ответ'); }
+};
+$('coopManOfferB').onclick = async () => {
+  try {
+    coopStatus('готовлю ответ…');
+    const ans = await netGuestAnswer($('coopOfferIn').value);
+    $('coopAnsOut').value = ans;
+    coopStatus('скопируй ОТВЕТ и отправь хосту');
+  } catch (e) { coopStatus('битый оффер'); }
+};
+const netCopy = el => {
+  try { el.select(); navigator.clipboard.writeText(el.value); } catch (e) { try { document.execCommand('copy'); } catch (e2) {} }
+};
+$('coopCopyOfferB').onclick = () => netCopy($('coopOfferTxt'));
+$('coopCopyAnsB').onclick = () => netCopy($('coopAnsOut'));
+$('coopStartB').onclick = () => {
+  SAVE.sector = 0;
+  NET.ally = { x: 70, y: 0, r: 13, hp: 100, maxHp: 100, flip: false, mov: false, wt: 0, hurtT: 0 };
+  netSend(NET.dcR, { t: 'go' });
+  hide('coop');
+  startRun();
+  player.x = -70; player.y = 0;
+};
+$('coopEndB').onclick = () => {
+  hide('coopEnd');
+  state = 'menu';
+  show('start');
+  renderMenu();
+};
+
 $('toBaseB').onclick = toBase;
 $('vBaseB').onclick = toBase;
 $('resumeB').onclick = togglePause;
@@ -3610,6 +4189,15 @@ DEV.rocks = () => dug.size;
 DEV.callSurv = () => { survAt = 0; };
 DEV.grabSurv = () => { if (surv) { surv.x = player.x + 4; surv.y = player.y; } };
 DEV.survInfo = () => surv ? surv.mode + ':' + Math.ceil(surv.mode === 'wait' ? surv.bleed : surv.escT) : 'нет';
+DEV.netSnap = () => { NET.ally = NET.ally || { hp: 100, maxHp: 100 }; return buildSnap(); };
+DEV.netApply = s => {
+  NET.role = 'guest'; NET.ready = true; NET.gEn = {};
+  NET.ally = { x: 0, y: 0, hp: 100, maxHp: 100 };
+  netApplySnap(s);
+  const n = enemies.length;
+  NET.role = null; NET.ready = false;
+  return n;
+};
 window.__dev = DEV;
 
 resetPlayer(); resetWeapons();
