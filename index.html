@@ -283,7 +283,8 @@ html,body{overscroll-behavior:none}
     </div>
     <div id="coopHost" style="display:none">
       <div class="sech">КОД КОМНАТЫ</div>
-      <div id="coopCode" style="font-size:34px;letter-spacing:.3em;color:var(--acid);margin:8px 0 14px"></div>
+      <div id="coopCode" style="font-size:34px;letter-spacing:.3em;color:var(--acid);margin:8px 0 10px"></div>
+      <button id="coopShareB" class="ghost" style="margin-bottom:12px">⇪ ПОДЕЛИТЬСЯ ССЫЛКОЙ</button>
       <button id="coopStartB" class="big" style="display:none">▶ В БОЙ</button>
       <details class="netdet"><summary>ручной обмен — если код не сработал</summary>
         <div class="sech">1 · СКОПИРУЙ И ОТПРАВЬ НАПАРНИКУ</div>
@@ -4288,6 +4289,17 @@ $('coopManOfferB').onclick = async () => {
 const netCopy = el => {
   try { el.select(); navigator.clipboard.writeText(el.value); } catch (e) { try { document.execCommand('copy'); } catch (e2) {} }
 };
+$('coopShareB').onclick = () => {
+  const url = location.origin + location.pathname + '#join=' + NET.code;
+  if (navigator.share) {
+    navigator.share({ title: 'ПУСТОШЬ — кооп-рейд', text: 'Заходи в рейд, код ' + NET.code, url })
+      .catch(() => {});
+  } else {
+    try { navigator.clipboard.writeText(url); } catch (e) {}
+    $('coopShareB').textContent = '✓ ССЫЛКА СКОПИРОВАНА';
+    setTimeout(() => { $('coopShareB').textContent = '⇪ ПОДЕЛИТЬСЯ ССЫЛКОЙ'; }, 1800);
+  }
+};
 $('coopCopyOfferB').onclick = () => netCopy($('coopOfferTxt'));
 $('coopCopyAnsB').onclick = () => netCopy($('coopAnsOut'));
 $('coopStartB').onclick = () => {
@@ -4373,7 +4385,21 @@ DEV.netApply = s => {
 window.__dev = DEV;
 
 resetPlayer(); resetWeapons();
-loadSave().then(() => { checkAch(); renderMenu(); });
+loadSave().then(() => {
+  checkAch();
+  renderMenu();
+  const jm = ((typeof location !== 'undefined' && location.hash) || '').match(/join=([A-Za-z0-9]{3,6})/);
+  if (jm) {
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    hide('start'); show('coop');
+    $('coopPick').style.display = 'none';
+    $('coopHost').style.display = 'none';
+    NET.role = 'guest';
+    $('coopJoin').style.display = '';
+    $('coopCodeIn').value = jm[1].toUpperCase();
+    $('coopGoB').onclick();
+  }
+});
 renderMenu();
 
 /* ================= цикл ================= */
