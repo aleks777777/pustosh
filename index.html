@@ -274,7 +274,7 @@ html,body{overscroll-behavior:none}
 <!-- КООП -->
 <div id="coop" class="ov hidden">
   <div class="panel">
-    <div class="eyebrow">кооп-рейд v3 · p2p напрямую, без сервера · сектор 07</div>
+    <div class="eyebrow">кооп-рейд v4 · p2p напрямую, без сервера · сектор 07</div>
     <h2>КООП</h2>
     <div id="coopStatus" class="metaline">выбери роль</div>
     <div id="coopPick">
@@ -668,7 +668,7 @@ function radioOnce(key, msg, urgent) {
 }
 
 /* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
-const GAMEVER = 3;
+const GAMEVER = 4;
 const NET = { role: null, ready: false, pc: null, dcR: null, dcU: null, code: '',
   ping: 0, ally: null, eid: 1, gEn: {}, sendT: 0, pingT: 0, auraT: 0, lastHp: 999,
   wp2: {}, g2lvl: {}, gp: 0, pend: 0, allyAuraR: 0 };
@@ -682,12 +682,17 @@ function roomCode() {
   return s;
 }
 function netMakePC() {
-  const pc = new RTCPeerConnection({ iceServers: [
-    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  const ice = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+  try {
+    const custom = JSON.parse(localStorage.getItem('pustosh-turn') || 'null');
+    if (custom && custom.urls) ice.push(custom);
+  } catch (e) {}
+  const pc = new RTCPeerConnection({ iceServers: ice.concat([
     { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-  ] });
+  ]) });
   NET.pc = pc;
   NET.cand = { host: 0, srflx: 0, relay: 0 };
   pc.onicecandidate = ev => {
@@ -872,7 +877,7 @@ function buildSnap() {
   }
   const CIDX = { '#ffd77a': 0, '#e88a4a': 1, '#9fe3e8': 2, '#e8dcc4': 3 };
   const bu = [];
-  for (const b of bullets) { if (bu.length >= 90) break; bu.push([Math.round(b.x), Math.round(b.y), CIDX[b.col] || 0]); }
+  for (const b of bullets) { if (bu.length >= 90) break; bu.push([Math.round(b.x), Math.round(b.y), CIDX[b.col] || 0, Math.round(b.vx / 10), Math.round(b.vy / 10)]); }
   const gm = [];
   for (const g of gems) { if (gm.length >= 60) break; gm.push([Math.round(g.x), Math.round(g.y), g.v > 3 ? 1 : 0]); }
   const be = enemies.find(e => e.t === 'boss');
@@ -932,7 +937,7 @@ function netApplySnap(s) {
   bossActive = s.bs >= 0;
   const CPAL = ['#ffd77a', '#e88a4a', '#9fe3e8', '#e8dcc4'];
   bullets.length = 0;
-  for (const b of s.bu) bullets.push({ x: b[0], y: b[1], vx: 0, vy: 0, r: 3, col: CPAL[b[2]] || CPAL[0] });
+  for (const b of s.bu) bullets.push({ x: b[0], y: b[1], vx: (b[3] || 0) * 10, vy: (b[4] || 0) * 10, r: 3, col: CPAL[b[2]] || CPAL[0] });
   gems.length = 0;
   for (const g of s.gm) gems.push({ x: g[0], y: g[1], v: g[2] ? 5 : 1 });
   pools.length = 0;
@@ -941,8 +946,9 @@ function netApplySnap(s) {
   if (s.mi) for (const m2 of s.mi) mines.push({ x: m2[0], y: m2[1], arm: m2[2] ? 0 : 0.5 });
   turrets.length = 0;
   if (s.tu) for (const t2 of s.tu) turrets.push({ x: t2[0], y: t2[1], t: 5, cd: 1 });
+  const oldRots = saws.map(sw => sw.rot || 0);
   saws.length = 0;
-  if (s.sw) for (const w2 of s.sw) saws.push({ x: w2[0], y: w2[1], vx: 0, vy: 0 });
+  if (s.sw) s.sw.forEach((w2, i) => saws.push({ x: w2[0], y: w2[1], vx: 0, vy: 0, rot: oldRots[i] || 0 }));
   dronePos.length = 0;
   if (s.dp) for (const d3 of s.dp) dronePos.push({ x: d3[0], y: d3[1], a: 0 });
   moloShots.length = 0;
@@ -1129,6 +1135,8 @@ function updateGuest(dt) {
     A.hurtT = Math.max(0, (A.hurtT || 0) - dt);
     if (A.mov) A.wt = (A.wt || 0) + dt;
   }
+  for (const b of bullets) { b.x += b.vx * dt; b.y += b.vy * dt; }
+  for (const sw of saws) sw.rot = (sw.rot || 0) + dt * 14;
   const sm2 = Math.min(1, dt * 12);
   for (const e of enemies) {
     if (e.tx !== undefined) { e.x += (e.tx - e.x) * sm2; e.y += (e.ty - e.y) * sm2; }
