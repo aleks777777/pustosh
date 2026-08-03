@@ -274,7 +274,7 @@ html,body{overscroll-behavior:none}
 <!-- КООП -->
 <div id="coop" class="ov hidden">
   <div class="panel">
-    <div class="eyebrow">кооп-рейд v5, без сервера · сектор 07</div>
+    <div class="eyebrow">кооп-рейд v6 · релей + p2p-апгрейд, без сервера · сектор 07</div>
     <h2>КООП</h2>
     <div id="coopStatus" class="metaline">выбери роль</div>
     <div id="coopPick">
@@ -668,7 +668,7 @@ function radioOnce(key, msg, urgent) {
 }
 
 /* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
-const GAMEVER = 5;
+const GAMEVER = 6;
 const RELAY_URL = ''; // wss://... с Railway — вставится после деплоя
 function relayURL() {
   try { const o = localStorage.getItem('pustosh-relay'); if (o) return o; } catch (e) {}
@@ -709,7 +709,7 @@ function netMakePC() {
   };
   const candStr = () => 'лок:' + NET.cand.host + ' внеш:' + NET.cand.srflx + ' реле:' + NET.cand.relay;
   pc.oniceconnectionstatechange = () => {
-    if (NET.ready) return;
+    if (NET.ready || NET.ws) return;
     const st = pc.iceConnectionState;
     if (st === 'checking') coopStatus('пробиваю путь… [' + candStr() + ']');
     else if (st === 'failed') coopStatus('✗ не пробились [' + candStr() + ']. ' +
@@ -731,18 +731,34 @@ function netIceDone(pc) {
 }
 function netWire(dc) {
   dc.onopen = () => {
-    if (NET.dcR && NET.dcR.readyState === 'open' && NET.dcU && NET.dcU.readyState === 'open') netReady();
+    if (!(NET.rtcR && NET.rtcR.readyState === 'open' && NET.rtcU && NET.rtcU.readyState === 'open')) return;
+    if (!NET.ready) {
+      NET.dcR = NET.rtcR; NET.dcU = NET.rtcU;
+      netReady();
+    } else migrateP2P();
   };
   dc.onmessage = ev => netOnMsg(ev.data);
   dc.onclose = () => netDrop();
+}
+/* пробились напрямую — переезжаем с релея на p2p, сервер отпускаем */
+function migrateP2P() {
+  if (NET.p2p) return;
+  NET.p2p = true;
+  NET.dcR = NET.rtcR;
+  NET.dcU = NET.rtcU;
+  const ws = NET.ws;
+  NET.ws = null;
+  if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} }
+  if (state === 'play') announce('КАНАЛ: НАПРЯМУЮ P2P');
+  else coopStatus('СВЯЗЬ: НАПРЯМУЮ (p2p) · релей отпущен');
 }
 const b64e = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
 const b64d = s => JSON.parse(decodeURIComponent(escape(atob(s.trim()))));
 async function netHostStart() {
   const pc = netMakePC();
-  NET.dcR = pc.createDataChannel('r');
-  NET.dcU = pc.createDataChannel('u', { ordered: false, maxRetransmits: 0 });
-  netWire(NET.dcR); netWire(NET.dcU);
+  NET.rtcR = pc.createDataChannel('r');
+  NET.rtcU = pc.createDataChannel('u', { ordered: false, maxRetransmits: 0 });
+  netWire(NET.rtcR); netWire(NET.rtcU);
   await pc.setLocalDescription(await pc.createOffer());
   await netIceDone(pc);
   return b64e(pc.localDescription);
@@ -750,7 +766,7 @@ async function netHostStart() {
 async function netGuestAnswer(offerB64) {
   const pc = netMakePC();
   pc.ondatachannel = ev => {
-    if (ev.channel.label === 'r') NET.dcR = ev.channel; else NET.dcU = ev.channel;
+    if (ev.channel.label === 'r') NET.rtcR = ev.channel; else NET.rtcU = ev.channel;
     netWire(ev.channel);
   };
   await pc.setRemoteDescription(b64d(offerB64));
@@ -851,6 +867,14 @@ function netReady() {
   MQ.stop();
   NET.lastHp = 999;
   netSend(NET.dcR, { t: 'hi', v: GAMEVER });
+  if (NET.ws && NET.role === 'host') {
+    setTimeout(() => {
+      if (!NET.ws || NET.p2p || NET.verBad) return;
+      netHostStart().then(offer => {
+        if (NET.ws && !NET.p2p) netSend(NET.dcR, { t: 'rtc', k: 'o', b: offer });
+      }).catch(() => {});
+    }, 1200);
+  }
   try { SFX.evolve(); } catch (e) {}
   if (NET.role === 'host') {
     coopStatus('СВЯЗЬ УСТАНОВЛЕНА · жми В БОЙ');
@@ -869,7 +893,8 @@ function netDrop() {
   NET.ws = null;
   MQ.stop();
   const preGame = wasReadyPre === false && state !== 'play';
-  NET.role = null; NET.ready = false; NET.pc = NET.dcR = NET.dcU = null;
+  NET.role = null; NET.ready = false; NET.pc = NET.dcR = NET.dcU = NET.rtcR = NET.rtcU = null;
+  NET.p2p = false;
   NET.ally = null; NET.gEn = {};
   $('coopLvl').style.display = 'none';
   $('coopStartB').style.display = 'none';
@@ -992,6 +1017,16 @@ function netOnMsg(raw) {
       $('coopStartB').style.display = 'none';
       coopStatus('✗ РАЗНЫЕ ВЕРСИИ ИГРЫ (у вас v' + GAMEVER + ', у напарника v' + (m.v || '1-2') +
         '). Оба обновите страницу с зажатым обновлением и попробуйте снова');
+    }
+    return;
+  }
+  if (m.t === 'rtc') {
+    if (m.k === 'o' && NET.role === 'guest' && NET.ws) {
+      netGuestAnswer(m.b).then(ans => {
+        if (NET.ws && !NET.p2p) netSend(NET.dcR, { t: 'rtc', k: 'a', b: ans });
+      }).catch(() => {});
+    } else if (m.k === 'a' && NET.role === 'host') {
+      netHostAccept(m.b).catch(() => {});
     }
     return;
   }
