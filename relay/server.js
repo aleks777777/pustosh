@@ -34,7 +34,7 @@ wss.on('connection', ws => {
       if (!r) { r = { h: null, g: null }; rooms.set(code, r); }
       const slot = m.j === 'h' ? 'h' : 'g';
       if (r[slot] && r[slot].readyState === 1) {
-        ws.send('{"err":"место занято"}');
+        ws.send('{"err":"в комнате уже двое"}');
         ws.close();
         return;
       }
