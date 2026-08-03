@@ -3195,11 +3195,21 @@ function updateHUD() {
 
 /* ================= ввод ================= */
 const keys = {};
+const KEYMAP = { w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD',
+  'ц': 'KeyW', 'ф': 'KeyA', 'ы': 'KeyS', 'в': 'KeyD' };
 addEventListener('keydown', e => {
   keys[e.code] = true;
+  const km = KEYMAP[(e.key || '').toLowerCase()];
+  if (km) keys[km] = true;
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].indexOf(e.code) >= 0) e.preventDefault();
 });
-addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('keyup', e => {
+  keys[e.code] = false;
+  const km = KEYMAP[(e.key || '').toLowerCase()];
+  if (km) keys[km] = false;
+});
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
 const joy = { active: false, id: null, sx: 0, sy: 0, dx: 0, dy: 0 };
 cv.addEventListener('touchstart', e => {
