@@ -274,7 +274,7 @@ html,body{overscroll-behavior:none}
 <!-- КООП -->
 <div id="coop" class="ov hidden">
   <div class="panel">
-    <div class="eyebrow">кооп-рейд · p2p напрямую, без сервера · сектор 07</div>
+    <div class="eyebrow">кооп-рейд v3 · p2p напрямую, без сервера · сектор 07</div>
     <h2>КООП</h2>
     <div id="coopStatus" class="metaline">выбери роль</div>
     <div id="coopPick">
@@ -668,6 +668,7 @@ function radioOnce(key, msg, urgent) {
 }
 
 /* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
+const GAMEVER = 3;
 const NET = { role: null, ready: false, pc: null, dcR: null, dcU: null, code: '',
   ping: 0, ally: null, eid: 1, gEn: {}, sendT: 0, pingT: 0, auraT: 0, lastHp: 999,
   wp2: {}, g2lvl: {}, gp: 0, pend: 0, allyAuraR: 0 };
@@ -809,6 +810,7 @@ function netReady() {
   NET.ready = true;
   MQ.stop();
   NET.lastHp = 999;
+  netSend(NET.dcR, { t: 'hi', v: GAMEVER });
   try { SFX.evolve(); } catch (e) {}
   if (NET.role === 'host') {
     coopStatus('СВЯЗЬ УСТАНОВЛЕНА · жми В БОЙ');
@@ -937,6 +939,15 @@ function netApplySnap(s) {
 }
 function netOnMsg(raw) {
   let m; try { m = JSON.parse(raw); } catch (e) { return; }
+  if (m.t === 'hi') {
+    if (m.v !== GAMEVER) {
+      NET.verBad = true;
+      $('coopStartB').style.display = 'none';
+      coopStatus('✗ РАЗНЫЕ ВЕРСИИ ИГРЫ (у вас v' + GAMEVER + ', у напарника v' + (m.v || '1-2') +
+        '). Оба обновите страницу с зажатым обновлением и попробуйте снова');
+    }
+    return;
+  }
   if (m.t === 'pi') { netSend(NET.dcR, { t: 'po', ts: m.ts }); return; }
   if (m.t === 'po') { NET.ping = Math.round(performance.now() - m.ts); return; }
   if (m.t === 'bye') { netDrop(); return; }
@@ -950,7 +961,7 @@ function netOnMsg(raw) {
     return;
   }
   if (m.t === 's') { if (state === 'play') netApplySnap(m); return; }
-  if (m.t === 'go') { guestGo(); return; }
+  if (m.t === 'go') { if (!NET.verBad) guestGo(); return; }
   if (m.t === 'ev') {
     if (m.k === 'ann') announce(m.m);
     else if (m.k === 'rad') radioSay(m.m);
@@ -4317,6 +4328,7 @@ $('coopShareB').onclick = () => {
 $('coopCopyOfferB').onclick = () => netCopy($('coopOfferTxt'));
 $('coopCopyAnsB').onclick = () => netCopy($('coopAnsOut'));
 $('coopStartB').onclick = () => {
+  if (NET.verBad) { coopStatus('✗ версии разные — сначала обновите страницы'); return; }
   SAVE.sector = 0;
   NET.ally = { x: 70, y: 0, r: 13, hp: 100, maxHp: 100, flip: false, mov: false, wt: 0, hurtT: 0 };
   netSend(NET.dcR, { t: 'go' });
@@ -4381,6 +4393,17 @@ DEV.coopSim = () => {
 };
 DEV.coopPick = m => applyGuestPick(m);
 DEV.coopXp = v => allyGainXP(v);
+DEV.guestSim = snap => {
+  const ch = { readyState: 'open', send() {} };
+  NET.role = 'guest'; NET.ready = true;
+  NET.dcR = ch; NET.dcU = ch;
+  NET.gEn = {};
+  NET.ally = { x: -70, y: 0, r: 13, hp: 100, maxHp: 100, flip: false, mov: false, wt: 0, hurtT: 0 };
+  state = 'play';
+  document.body.classList.add('ingame');
+  netApplySnap(snap);
+  return enemies.length;
+};
 DEV.coopInfo = () => ({
   bl: !!NET.wp2.blaster,
   sg: !!(NET.wp2.shotgun && NET.wp2.shotgun.on),
