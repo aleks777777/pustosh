@@ -716,7 +716,12 @@ function netMakePC() {
       (NET.cand.relay === 0 ? 'Релей недоступен — попробуйте хот-спот телефона' : 'Попробуйте другую сеть'));
   };
   pc.onconnectionstatechange = () => {
-    if (['failed', 'disconnected', 'closed'].indexOf(pc.connectionState) >= 0) netDrop();
+    if (['failed', 'disconnected', 'closed'].indexOf(pc.connectionState) < 0) return;
+    if (NET.p2p || !NET.ws) { netDrop(); return; }
+    // фоновая попытка p2p не удалась — тихо прибираем, остаёмся на релее
+    try { pc.close(); } catch (e) {}
+    if (NET.pc === pc) NET.pc = null;
+    NET.rtcR = NET.rtcU = null;
   };
   return pc;
 }
@@ -738,7 +743,7 @@ function netWire(dc) {
     } else migrateP2P();
   };
   dc.onmessage = ev => netOnMsg(ev.data);
-  dc.onclose = () => netDrop();
+  dc.onclose = () => { if (dc === NET.dcR || dc === NET.dcU) netDrop(); };
 }
 /* пробились напрямую — переезжаем с релея на p2p, сервер отпускаем */
 function migrateP2P() {
@@ -1230,6 +1235,9 @@ function updateGuest(dt) {
   }
   for (let i = decals.length - 1; i >= 0; i--) { decals[i].t -= dt; if (decals[i].t <= 0) decals.splice(i, 1); }
   for (let i = rings.length - 1; i >= 0; i--) { rings[i].t -= dt; if (rings[i].t <= 0) rings.splice(i, 1); }
+  for (let i = flashes.length - 1; i >= 0; i--) { flashes[i].t -= dt; if (flashes[i].t <= 0) flashes.splice(i, 1); }
+  for (let i = rails.length - 1; i >= 0; i--) { rails[i].t -= dt; if (rails[i].t <= 0) rails.splice(i, 1); }
+  for (let i = boltsFx.length - 1; i >= 0; i--) { boltsFx[i].t -= dt; if (boltsFx[i].t <= 0) boltsFx.splice(i, 1); }
   shake = Math.max(0, shake - dt * 40);
   // рация
   radioCool -= dt;
