@@ -689,11 +689,21 @@ function netMakePC() {
     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
   ] });
   NET.pc = pc;
+  NET.cand = { host: 0, srflx: 0, relay: 0 };
+  pc.onicecandidate = ev => {
+    if (!ev.candidate) return;
+    const c = ev.candidate.candidate || '';
+    if (c.indexOf(' typ relay') >= 0) NET.cand.relay++;
+    else if (c.indexOf(' typ srflx') >= 0) NET.cand.srflx++;
+    else if (c.indexOf(' typ host') >= 0) NET.cand.host++;
+  };
+  const candStr = () => 'лок:' + NET.cand.host + ' внеш:' + NET.cand.srflx + ' реле:' + NET.cand.relay;
   pc.oniceconnectionstatechange = () => {
     if (NET.ready) return;
     const st = pc.iceConnectionState;
-    if (st === 'checking') coopStatus('пробиваю путь между вами…');
-    else if (st === 'failed') coopStatus('✗ не пробились. Другая сеть/Wi-Fi без изоляции, или ручной обмен');
+    if (st === 'checking') coopStatus('пробиваю путь… [' + candStr() + ']');
+    else if (st === 'failed') coopStatus('✗ не пробились [' + candStr() + ']. ' +
+      (NET.cand.relay === 0 ? 'Релей недоступен — попробуйте хот-спот телефона' : 'Попробуйте другую сеть'));
   };
   pc.onconnectionstatechange = () => {
     if (['failed', 'disconnected', 'closed'].indexOf(pc.connectionState) >= 0) netDrop();
@@ -831,7 +841,11 @@ function netDrop() {
   NET.ally = null; NET.gEn = {};
   $('coopLvl').style.display = 'none';
   $('coopStartB').style.display = 'none';
-  if (preGame) coopStatus('✗ соединение сорвалось — попробуйте ещё раз или ручной обмен');
+  if (preGame) {
+    const c = NET.cand || { host: 0, srflx: 0, relay: 0 };
+    coopStatus('✗ сорвалось [лок:' + c.host + ' внеш:' + c.srflx + ' реле:' + c.relay + '] — ' +
+      (c.relay === 0 ? 'релей мёртв: подключите оба устройства к хот-споту телефона и повторите' : 'попробуйте ещё раз'));
+  }
   if (wasHostInRun) announce('СВЯЗЬ ПОТЕРЯНА — ДОБИВАЙ САМ');
   if (wasGuestInRun) {
     state = 'menu';
