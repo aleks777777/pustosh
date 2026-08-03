@@ -669,7 +669,7 @@ function radioOnce(key, msg, urgent) {
 
 /* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
 const GAMEVER = 6;
-const RELAY_URL = ''; // wss://... с Railway — вставится после деплоя
+const RELAY_URL = 'wss://pustosh-production.up.railway.app';
 function relayURL() {
   try { const o = localStorage.getItem('pustosh-relay'); if (o) return o; } catch (e) {}
   return RELAY_URL;
