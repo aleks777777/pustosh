@@ -2298,7 +2298,7 @@ function gainXP(v) {
 /* ================= копаемый мир (сектор 08) ================= */
 const CS2 = 56, ROCK_HP = [0, 40, 70, 1e9, 1e9];
 /* ===== сектор 09: лабиринт Корневища ===== */
-const MZ = { on: false, N: 9, P: 6, g0: -27, tiles: null, GW: 56, doors: [], doorMap: {},
+const MZ = { on: false, N: 13, P: 7, g0: -46, tiles: null, GW: 93, doors: [], doorMap: {},
   gateMap: {}, gateOpen: false, flow: null, fdist: null, flowT: 0, hx: 0, hy: 0,
   heart: -1, bossGo: false, nodesLeft: 0, warnCol: 0 };
 const mzKey = (gx, gy) => (gx - MZ.g0) + (gy - MZ.g0) * MZ.GW;
@@ -2338,10 +2338,10 @@ function mzCarve(T, cx, cy, axis) {
   return out;
 }
 function mazeGen() {
-  const N = MZ.N, P = MZ.P;
+  const N = MZ.N, P = MZ.P, mid = (N - 1) / 2;
   MZ.on = true;
   MZ.GW = N * P + 2;
-  MZ.g0 = -Math.round(1 + 4 * P + (P - 2) / 2);
+  MZ.g0 = -Math.round(1 + mid * P + (P - 2) / 2);
   MZ.doors = []; MZ.doorMap = {}; MZ.gateMap = {}; MZ.gateOpen = false;
   MZ.bossGo = false; MZ.flowT = 0;
   const T = new Uint8Array(MZ.GW * MZ.GW).fill(3);
@@ -2350,7 +2350,7 @@ function mazeGen() {
     for (let ly = 0; ly < P - 2; ly++) for (let lx = 0; lx < P - 2; lx++)
       T[(1 + cx * P + lx) + (1 + cy * P + ly) * MZ.GW] = 0;
   // остов: случайный обход в глубину — связность гарантирована
-  const vis = new Uint8Array(N * N), st = [4 + 4 * N];
+  const vis = new Uint8Array(N * N), st = [mid + mid * N];
   vis[st[0]] = 1;
   const treeE = new Set();
   const deg = new Uint8Array(N * N);
@@ -2369,12 +2369,41 @@ function mazeGen() {
     vis[pick[0]] = 1;
     st.push(pick[0]);
   }
-  // петли-двери: только ДОБАВОЧНЫЕ проходы дышат — остов не трогаем никогда
+  // сердце — дальний ЛИСТ остова во внутренней зоне (не у кромки): арене нужно место
+  const tDist = new Int16Array(N * N).fill(-1);
+  {
+    const q2 = [mid + mid * N];
+    tDist[q2[0]] = 0;
+    while (q2.length) {
+      const c = q2.shift(), cx = c % N, cy = (c / N) | 0;
+      const nb2 = [];
+      if (cx > 0) nb2.push(c - 1);
+      if (cx < N - 1) nb2.push(c + 1);
+      if (cy > 0) nb2.push(c - N);
+      if (cy < N - 1) nb2.push(c + N);
+      for (const n3 of nb2) {
+        if (tDist[n3] >= 0 || !treeE.has(Math.min(c, n3) + ':' + Math.max(c, n3))) continue;
+        tDist[n3] = tDist[c] + 1;
+        q2.push(n3);
+      }
+    }
+  }
+  let heart = -1;
+  for (let c = 0; c < N * N; c++) {
+    const cx = c % N, cy = (c / N) | 0;
+    if (deg[c] === 1 && c !== mid + mid * N && cx >= 1 && cx <= N - 2 && cy >= 1 && cy <= N - 2 &&
+      (heart < 0 || tDist[c] > tDist[heart])) heart = c;
+  }
+  if (heart < 0) heart = 0;
+  MZ.heart = heart;
+  const hcx = heart % N, hcy = (heart / N) | 0;
+  const touchesHeart = (a, b) => a === heart || b === heart;
+  // петли-двери: только ДОБАВОЧНЫЕ проходы дышат — остов не трогаем никогда; сердце не трогаем тоже
   const extra = [];
   for (let cy = 0; cy < N; cy++) for (let cx = 0; cx < N; cx++) {
     const c = cx + cy * N;
-    if (cx < N - 1 && !treeE.has(c + ':' + (c + 1))) extra.push([c, c + 1, 'V', cx, cy]);
-    if (cy < N - 1 && !treeE.has(c + ':' + (c + N))) extra.push([c, c + N, 'H', cx, cy]);
+    if (cx < N - 1 && !treeE.has(c + ':' + (c + 1)) && !touchesHeart(c, c + 1)) extra.push([c, c + 1, 'V', cx, cy]);
+    if (cy < N - 1 && !treeE.has(c + ':' + (c + N)) && !touchesHeart(c, c + N)) extra.push([c, c + N, 'H', cx, cy]);
   }
   for (let i = extra.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const t2 = extra[i]; extra[i] = extra[j]; extra[j] = t2; }
   const nDoors = Math.round(extra.length * 0.32);
@@ -2386,34 +2415,39 @@ function mazeGen() {
       cx: (tiles2.length ? ((tiles2[0] % MZ.GW) + MZ.g0) * CS2 : 0), cy2: 0 });
     tiles2.forEach(ti => { MZ.doorMap[ti] = di; });
   }
+  // арена сердца: ядро клетки + все её перемычки = зал ~9×9 тайлов с несколькими входами.
+  // режем ТОЛЬКО стены самой клетки сердца — связность остова не затронута по построению
+  {
+    const core = P - 2;
+    const bx = 1 + hcx * P, by = 1 + hcy * P;
+    const ring = [];
+    for (let ty = by - 2; ty < by + core + 2; ty++) for (let tx = bx - 2; tx < bx + core + 2; tx++) {
+      const inCore = tx >= bx && tx < bx + core && ty >= by && ty < by + core;
+      T[tx + ty * MZ.GW] = 0;
+      if (!inCore) ring.push(tx + ty * MZ.GW);
+    }
+    ring.forEach(ti => { MZ.gateMap[ti] = 1; delete MZ.doorMap[ti]; });
+  }
   MZ.tiles = T;
-  // дистанции от старта, сердце — самая дальняя клетка
-  const dist = mzBFS(4 + 4 * N, true);
-  // сердце — самый дальний ЛИСТ остова: врата отрежут только его клетку, скелет цел
-  let heart = -1;
-  for (let c = 0; c < N * N; c++)
-    if (deg[c] === 1 && c !== 4 + 4 * N && (heart < 0 || dist[c] > dist[heart])) heart = c;
-  if (heart < 0) heart = 0;
-  MZ.heart = heart;
+  const dist = mzBFS(mid + mid * N, true);
   const hc = mzCellCenter(heart);
   MZ.hx = hc.x; MZ.hy = hc.y;
-  // врата сердца: все проходы в его клетку запечатаны мембраной до зачистки узлов
-  const hcx = heart % N, hcy = (heart / N) | 0;
-  const gate = [];
-  if (hcx > 0 && !MZ.tiles[mzGap(hcx - 1, hcy, 'V')]) gate.push(...mzGapTiles(hcx - 1, hcy, 'V'));
-  if (hcx < N - 1 && !MZ.tiles[mzGap(hcx, hcy, 'V')]) gate.push(...mzGapTiles(hcx, hcy, 'V'));
-  if (hcy > 0 && !MZ.tiles[mzGap(hcx, hcy - 1, 'H')]) gate.push(...mzGapTiles(hcx, hcy - 1, 'H'));
-  if (hcy < N - 1 && !MZ.tiles[mzGap(hcx, hcy, 'H')]) gate.push(...mzGapTiles(hcx, hcy, 'H'));
-  gate.forEach(ti => { MZ.gateMap[ti] = 1; delete MZ.doorMap[ti]; });
   // узлы: 5 дальних клеток, разнесённых между собой; не в сердце и не у старта
   const cand = [];
-  for (let c = 0; c < N * N; c++) if (c !== heart && dist[c] >= 3) cand.push(c);
+  for (let c = 0; c < N * N; c++) {
+    const cx = c % N, cy = (c / N) | 0;
+    if (c !== heart && dist[c] >= 6 && Math.abs(cx - hcx) + Math.abs(cy - hcy) >= 2) cand.push(c);
+  }
   cand.sort((a, b) => dist[b] - dist[a]);
   const nodes = [];
   for (const c of cand) {
     if (nodes.length >= 5) break;
     const cx = c % N, cy = (c / N) | 0;
-    if (nodes.every(n2 => Math.abs(n2 % N - cx) + Math.abs(((n2 / N) | 0) - cy) >= 3)) nodes.push(c);
+    if (nodes.every(n2 => Math.abs(n2 % N - cx) + Math.abs(((n2 / N) | 0) - cy) >= 4)) nodes.push(c);
+  }
+  for (const c of cand) {
+    if (nodes.length >= 5) break;
+    if (nodes.indexOf(c) === -1) nodes.push(c);
   }
   MZ.nodesLeft = nodes.length;
   for (const c of nodes) {
@@ -4091,17 +4125,13 @@ function draw() {
         ctx.fillRect(tx, ty, CS2, CS2);
       }
     }
-    // полумрак Корневища: свет только вокруг резчика
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const lx = player.x - cam.x, ly = player.y - cam.y;
-    const gCache = ctx.createRadialGradient(lx, ly, 150, lx, ly, 470);
+    // полумрак Корневища: свет вокруг резчика, в мировых координатах (не зависит от dpr)
+    const gCache = ctx.createRadialGradient(player.x, player.y, 175, player.x, player.y, 540);
     gCache.addColorStop(0, 'rgba(5,6,9,0)');
     gCache.addColorStop(0.6, 'rgba(5,6,9,0.55)');
     gCache.addColorStop(1, 'rgba(4,5,8,0.93)');
     ctx.fillStyle = gCache;
-    ctx.fillRect(0, 0, W, H);
-    ctx.restore();
+    ctx.fillRect(cam.x - 80, cam.y - 80, W + 160, H + 160);
     // проводник: стрелка к ближнему узлу, после зачистки — к сердцу
     let tgt2 = null, tCol = '#d47ba8';
     if (MZ.nodesLeft > 0) {
