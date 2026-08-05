@@ -1862,6 +1862,7 @@ async function loadSave() {
   if (SAVE.besti.gardener < SAVE.wins - SAVE.wins2) SAVE.besti.gardener = SAVE.wins - SAVE.wins2;
   if (SAVE.besti.bloom < SAVE.wins2) SAVE.besti.bloom = SAVE.wins2;
   if (SAVE.wins > 0 && SAVE.unlocked < 2) SAVE.unlocked = 2;
+  if (SAVE.wins2 > 0 && SAVE.unlocked < 3) SAVE.unlocked = 3; // Первоцвет уже пал — Корневище открыто
   if (SAVE.sector >= SAVE.unlocked) SAVE.sector = 0;
   SAVE.persist = store.persist;
 }
