@@ -612,6 +612,10 @@ const rp = a => a[irnd(0, a.length - 1)];
 const RADIO = {
   start: ['Связь чистая. Принеси металл — и вернись сам.', 'Эфир твой, резчик. Схрон слушает.', 'Датчики в норме. Удачной жатвы.'],
   start8: ['Теплицы глушат сигнал. Кричи, если что.', 'Стекло под ногами — это дом Цветения. Не гости долго.'],
+  start9: ['Ты глубоко. Связь на нитке. Найди узлы — они держат его память.', 'Здесь темно и тепло. Не слушай шёпот. Иди по стрелке.'],
+  node9: ['Узел погас. Оно вздрогнуло. Хорошо.', 'Ещё один. Шёпот стал тише… или ближе. Иди.', 'Оно перестраивает коридоры. Злится. Значит, работает.'],
+  gate9: ['Все узлы погашены. Мембрана у сердца открылась. Марта там. Иди — и что бы оно ни говорило её голосом, не останавливайся.'],
+  bossH: ['Это не Марта. Слышишь? ЭТО НЕ МАРТА. Бей в сердце.'],
   elite: ['Золотой на датчиках. Несёт что-то — забери.', 'Крупная отметка, блестит. Твой профиль.'],
   lowhp: ['Твой пульс на весь эфир. Отойди за камень, отдышись.', 'Медпункт пуст, резчик. Береги шкуру.'],
   k100: ['Сотня. Резак поёт.', 'Сто отметок погасло. Так держать.'],
@@ -1942,6 +1946,14 @@ const LOGS2 = [
 ];
 
 /* ================= секторы ================= */
+const LOGS3 = [
+  { t: 'ЗАПИСЬ М-1 · ДИКТОФОН', x: 'Если кто-то это слышит — я спустилась сама. Никто не виноват. Шёпот не угрожал. Он просто знал моё имя, а наверху его не знал уже никто.' },
+  { t: 'ЗАПИСЬ М-2 · ДИКТОФОН', x: 'Тут тепло. Корни тёплые, как батареи в интернате. Я разбила лагерь у развилки. Оно приносит мне воду по капле — я не сразу поняла, что это забота.' },
+  { t: 'ЗАПИСЬ М-3 · ДИКТОФОН', x: 'Узлы — это его память. Я приложила ладонь и увидела теплицы до Цветения. Люди смеялись. Оно хранит их всех. Оно не понимает, что они умерли.' },
+  { t: 'ЗАПИСЬ М-4 · ДИКТОФОН', x: 'Я пробовала уйти. Дважды. Коридоры мягко заворачивали меня обратно, как заворачивают одеяло. Я больше не сержусь. Я осталась бы и сама. Наверное. Уже не отличаю.' },
+  { t: 'ЗАПИСЬ М-5 · ДИКТОФОН', x: 'Оно стало называть меня своим именем, а себя — моим. Если придёшь — не слушай его долго. И не слушай меня. Мы тут уже немного перепутались.' },
+  { t: 'ПОСЛЕДНЯЯ ЗАПИСЬ · У СЕРДЦА', x: 'Смотритель, если это ты — спасибо, что шёл. То, что говорит моим голосом, попросит остановиться. Не останавливайся. Лучший конец для нас обеих — тишина. Твоя М.' }
+];
 const SECTORS = [
   { n: 'СЕКТОР 07', sub: 'ПУСТОШЬ', d: 'Знакомые грядки. Здесь всё началось для тебя.',
     bg: '#12100c', grid: 'rgba(232,220,196,0.035)', deco: 'waste', spit: false,
@@ -1961,7 +1973,17 @@ const SECTORS = [
     ch: ['', 'ГЛАВА I — СТЕКЛО ПОД НОГАМИ', 'ГЛАВА II — ЗДЕСЬ ВСЁ НАЧАЛОСЬ', 'ГЛАВА III — ГРЯДКИ ПОМНЯТ ЕГО',
       'ГЛАВА IV — ПЫЛЬЦА СГУЩАЕТСЯ', 'ГЛАВА V — ТЕПЛИЦЫ ДЫШАТ', 'ГЛАВА VI — КОРНИ УХОДЯТ ВГЛУБЬ',
       'ГЛАВА VII — САД БЕЗ САДОВНИКА', 'ГЛАВА VIII — ОНО ЦВЕТЁТ ВО ТЬМЕ', 'ГЛАВА IX — ПЕРВОЦВЕТ ПРОСЫПАЕТСЯ'],
-    epi: 'Первоцвет складывает лепестки — навсегда. Стеклянные своды «Эдема» гаснут, и по теплицам впервые за годы идёт обычный сквозняк. Ты уносишь последнюю страницу дневника и горсть семян — обычных, честных семян. Схрон-7 будет сажать хлеб. А пустошь — учиться жить без садовников.' }
+    epi: 'Первоцвет складывает лепестки — навсегда. Стеклянные своды «Эдема» гаснут, и по теплицам впервые за годы идёт обычный сквозняк. Ты уносишь последнюю страницу дневника и горсть семян — обычных, честных семян. Схрон-7 будет сажать хлеб. А пустошь — учиться жить без садовников.' },
+  { n: 'СЕКТОР 09', sub: 'КОРНЕВИЩЕ', d: 'Спуск под купол, к Марте. Сплошные корни-стены, живые проходы. Найди и выжги пять споровых узлов — и путь к сердцу откроется. Скрап ×1.6.',
+    bg: '#08090c', grid: 'rgba(190,170,220,0.028)', deco: 'roots', spit: true, rocks: true, maze: true,
+    hpM: 1.75, dmgM: 1.35, scrapM: 1.6,
+    pal: { runner: ['#8a7fae', '#413a5e'], swarm: ['#c98fe0', '#5f3579'], brute: ['#7a6a9a', '#3a3050'], spit: ['#9fd4c8', '#2f5b5e'] },
+    boss: { kind: 'heart', name: 'СЕРДЦЕ КОРНЕВИЩА', ann: '♥ ОНО ЗНАЕТ ТВОЁ ИМЯ', fall: 'СЕРДЦЕ ОСТАНОВИЛОСЬ',
+      hp: 30000, dmg: 50, spd: 0, col: '#d47ba8', col2: '#6a2d48' },
+    ch: ['', 'ГЛАВА I — ЗДЕСЬ НЕТ НЕБА', 'ГЛАВА II — КОРНИ ДЫШАТ', 'ГЛАВА III — ШЁПОТ СТАЛ БЛИЖЕ',
+      'ГЛАВА IV — ОНА ЗВАЛА ТЕБЯ ПО ИМЕНИ', 'ГЛАВА V — УЗЛЫ ПУЛЬСИРУЮТ В ТАКТ', 'ГЛАВА VI — ТЕМНОТА ГУСТЕЕТ',
+      'ГЛАВА VII — СТЕНЫ ПОМНЯТ ЕЁ ГОЛОС', 'ГЛАВА VIII — СЕРДЦЕ БЬЁТСЯ ЧАЩЕ', 'ГЛАВА IX — ОНА ЖДЁТ В ЦЕНТРЕ'],
+    epi: 'Сердце останавливается — и вместе с ним смолкает шёпот, который ты слышал все эти годы, сам того не зная. В тишине ты находишь её. Марта сидит у корня, оплетённая, спокойная, и на её лице — облегчение. «Ты дошёл, — читаешь по губам. — Теперь пусть спит». Ты хоронишь её под куполом, где всегда тепло. Наверху, в Схроне, впервые никому не снятся сады.' }
 ];
 const SEC = () => SECTORS[SAVE.sector] || SECTORS[0];
 
@@ -2273,13 +2295,277 @@ function gainXP(v) {
 }
 
 /* ================= копаемый мир (сектор 08) ================= */
-const CS2 = 56, ROCK_HP = [0, 40, 70];
+const CS2 = 56, ROCK_HP = [0, 40, 70, 1e9, 1e9];
+/* ===== сектор 09: лабиринт Корневища ===== */
+const MZ = { on: false, N: 9, P: 6, g0: -27, tiles: null, GW: 56, doors: [], doorMap: {},
+  gateMap: {}, gateOpen: false, flow: null, fdist: null, flowT: 0, hx: 0, hy: 0,
+  heart: -1, bossGo: false, nodesLeft: 0, warnCol: 0 };
+const mzKey = (gx, gy) => (gx - MZ.g0) + (gy - MZ.g0) * MZ.GW;
+const mzIn = (gx, gy) => gx >= MZ.g0 && gy >= MZ.g0 && gx < MZ.g0 + MZ.GW && gy < MZ.g0 + MZ.GW;
+function mzCellCenter(c) {
+  const N = MZ.N, P = MZ.P;
+  const cx = c % N, cy = (c / N) | 0;
+  return { x: (MZ.g0 + 1 + cx * P + (P - 2) / 2) * CS2, y: (MZ.g0 + 1 + cy * P + (P - 2) / 2) * CS2 };
+}
+function mzCellOf(x, y) {
+  const N = MZ.N, P = MZ.P;
+  const cx = clamp(Math.floor((x / CS2 - MZ.g0 - 1) / P), 0, N - 1);
+  const cy = clamp(Math.floor((y / CS2 - MZ.g0 - 1) / P), 0, N - 1);
+  return cx + cy * N;
+}
+function mazeAt(gx, gy) {
+  if (!MZ.on || !MZ.tiles) return 3;
+  if (!mzIn(gx, gy)) return 3;
+  const i = mzKey(gx, gy);
+  if (MZ.tiles[i]) return 3;
+  if (MZ.gateMap[i] !== undefined && !MZ.gateOpen) return 4;
+  const di = MZ.doorMap[i];
+  if (di !== undefined && MZ.doors[di].closed) return 4;
+  return 0;
+}
+function mzCarve(T, cx, cy, axis) {
+  // прорубить проход между клеткой (cx,cy) и соседом по оси; вернуть тайлы прохода
+  const N = MZ.N, P = MZ.P, core = P - 2;
+  const bx = 1 + cx * P, by = 1 + cy * P;
+  const out = [];
+  for (let k = 0; k < core; k++) for (let w = 0; w < 2; w++) {
+    const tx = axis === 'V' ? bx + core + w : bx + k;
+    const ty = axis === 'V' ? by + k : by + core + w;
+    T[tx + ty * MZ.GW] = 0;
+    out.push(tx + ty * MZ.GW);
+  }
+  return out;
+}
+function mazeGen() {
+  const N = MZ.N, P = MZ.P;
+  MZ.on = true;
+  MZ.GW = N * P + 2;
+  MZ.g0 = -Math.round(1 + 4 * P + (P - 2) / 2);
+  MZ.doors = []; MZ.doorMap = {}; MZ.gateMap = {}; MZ.gateOpen = false;
+  MZ.bossGo = false; MZ.flowT = 0;
+  const T = new Uint8Array(MZ.GW * MZ.GW).fill(3);
+  // ядра клеток
+  for (let cy = 0; cy < N; cy++) for (let cx = 0; cx < N; cx++)
+    for (let ly = 0; ly < P - 2; ly++) for (let lx = 0; lx < P - 2; lx++)
+      T[(1 + cx * P + lx) + (1 + cy * P + ly) * MZ.GW] = 0;
+  // остов: случайный обход в глубину — связность гарантирована
+  const vis = new Uint8Array(N * N), st = [4 + 4 * N];
+  vis[st[0]] = 1;
+  const treeE = new Set();
+  const deg = new Uint8Array(N * N);
+  while (st.length) {
+    const c = st[st.length - 1], cx = c % N, cy = (c / N) | 0;
+    const nb = [];
+    if (cx > 0 && !vis[c - 1]) nb.push([c - 1, 'V', cx - 1, cy]);
+    if (cx < N - 1 && !vis[c + 1]) nb.push([c + 1, 'V', cx, cy]);
+    if (cy > 0 && !vis[c - N]) nb.push([c - N, 'H', cx, cy - 1]);
+    if (cy < N - 1 && !vis[c + N]) nb.push([c + N, 'H', cx, cy]);
+    if (!nb.length) { st.pop(); continue; }
+    const pick = nb[(Math.random() * nb.length) | 0];
+    mzCarve(T, pick[2], pick[3], pick[1]);
+    treeE.add(Math.min(c, pick[0]) + ':' + Math.max(c, pick[0]));
+    deg[c]++; deg[pick[0]]++;
+    vis[pick[0]] = 1;
+    st.push(pick[0]);
+  }
+  // петли-двери: только ДОБАВОЧНЫЕ проходы дышат — остов не трогаем никогда
+  const extra = [];
+  for (let cy = 0; cy < N; cy++) for (let cx = 0; cx < N; cx++) {
+    const c = cx + cy * N;
+    if (cx < N - 1 && !treeE.has(c + ':' + (c + 1))) extra.push([c, c + 1, 'V', cx, cy]);
+    if (cy < N - 1 && !treeE.has(c + ':' + (c + N))) extra.push([c, c + N, 'H', cx, cy]);
+  }
+  for (let i = extra.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const t2 = extra[i]; extra[i] = extra[j]; extra[j] = t2; }
+  const nDoors = Math.round(extra.length * 0.32);
+  for (let i = 0; i < nDoors; i++) {
+    const [a, b, ax, cx, cy] = extra[i];
+    const tiles2 = mzCarve(T, cx, cy, ax);
+    const di = MZ.doors.length;
+    MZ.doors.push({ a, b, tiles: tiles2, closed: false, t: rnd(5, 13), warn: 0,
+      cx: (tiles2.length ? ((tiles2[0] % MZ.GW) + MZ.g0) * CS2 : 0), cy2: 0 });
+    tiles2.forEach(ti => { MZ.doorMap[ti] = di; });
+  }
+  MZ.tiles = T;
+  // дистанции от старта, сердце — самая дальняя клетка
+  const dist = mzBFS(4 + 4 * N, true);
+  // сердце — самый дальний ЛИСТ остова: врата отрежут только его клетку, скелет цел
+  let heart = -1;
+  for (let c = 0; c < N * N; c++)
+    if (deg[c] === 1 && c !== 4 + 4 * N && (heart < 0 || dist[c] > dist[heart])) heart = c;
+  if (heart < 0) heart = 0;
+  MZ.heart = heart;
+  const hc = mzCellCenter(heart);
+  MZ.hx = hc.x; MZ.hy = hc.y;
+  // врата сердца: все проходы в его клетку запечатаны мембраной до зачистки узлов
+  const hcx = heart % N, hcy = (heart / N) | 0;
+  const gate = [];
+  if (hcx > 0 && !MZ.tiles[mzGap(hcx - 1, hcy, 'V')]) gate.push(...mzGapTiles(hcx - 1, hcy, 'V'));
+  if (hcx < N - 1 && !MZ.tiles[mzGap(hcx, hcy, 'V')]) gate.push(...mzGapTiles(hcx, hcy, 'V'));
+  if (hcy > 0 && !MZ.tiles[mzGap(hcx, hcy - 1, 'H')]) gate.push(...mzGapTiles(hcx, hcy - 1, 'H'));
+  if (hcy < N - 1 && !MZ.tiles[mzGap(hcx, hcy, 'H')]) gate.push(...mzGapTiles(hcx, hcy, 'H'));
+  gate.forEach(ti => { MZ.gateMap[ti] = 1; delete MZ.doorMap[ti]; });
+  // узлы: 5 дальних клеток, разнесённых между собой; не в сердце и не у старта
+  const cand = [];
+  for (let c = 0; c < N * N; c++) if (c !== heart && dist[c] >= 3) cand.push(c);
+  cand.sort((a, b) => dist[b] - dist[a]);
+  const nodes = [];
+  for (const c of cand) {
+    if (nodes.length >= 5) break;
+    const cx = c % N, cy = (c / N) | 0;
+    if (nodes.every(n2 => Math.abs(n2 % N - cx) + Math.abs(((n2 / N) | 0) - cy) >= 3)) nodes.push(c);
+  }
+  MZ.nodesLeft = nodes.length;
+  for (const c of nodes) {
+    const p2 = mzCellCenter(c);
+    enemies.push({ t: 'node', x: p2.x, y: p2.y, r: 24, hp: 1050, mhp: 1050, spd: 0, dmg: 0,
+      xp: 40, col: '#d47ba8', col2: '#5a2840', id: NET.eid++, atk: 0, dcd: 0, hitT: 0,
+      wob: rnd(TAU), shT: 2, satk: 0, mode: 'idle', dashT: 5, teleT: 0, sumT: 8, vx: 0, vy: 0 });
+  }
+  mzFlow();
+}
+function mzGap(cx, cy, ax) {
+  const P = MZ.P, core = P - 2;
+  const tx = ax === 'V' ? 1 + cx * P + core : 1 + cx * P;
+  const ty = ax === 'V' ? 1 + cy * P : 1 + cy * P + core;
+  return tx + ty * MZ.GW;
+}
+function mzGapTiles(cx, cy, ax) {
+  const P = MZ.P, core = P - 2, out = [];
+  for (let k = 0; k < core; k++) for (let w = 0; w < 2; w++) {
+    const tx = ax === 'V' ? 1 + cx * P + core + w : 1 + cx * P + k;
+    const ty = ax === 'V' ? 1 + cy * P + k : 1 + cy * P + core + w;
+    out.push(tx + ty * MZ.GW);
+  }
+  return out;
+}
+function mzOpenEdge(a, b) {
+  // проход между соседями открыт? остов всегда да; дверь — если не закрыта; врата — по флагу
+  const N = MZ.N;
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  const ax = hi - lo === 1 ? 'V' : 'H';
+  const cx = lo % N, cy = (lo / N) | 0;
+  const gi = mzGap(cx, cy, ax);
+  if (MZ.tiles[gi]) return false;
+  if (MZ.gateMap[gi] !== undefined) return MZ.gateOpen;
+  const di = MZ.doorMap[gi];
+  if (di !== undefined) return !MZ.doors[di].closed;
+  return true;
+}
+function mzBFS(from, ignoreDoors) {
+  const N = MZ.N, dist = new Int16Array(N * N).fill(-1), q = [from];
+  dist[from] = 0;
+  while (q.length) {
+    const c = q.shift(), cx = c % N, cy = (c / N) | 0;
+    const nb = [];
+    if (cx > 0) nb.push(c - 1);
+    if (cx < N - 1) nb.push(c + 1);
+    if (cy > 0) nb.push(c - N);
+    if (cy < N - 1) nb.push(c + N);
+    for (const n2 of nb) {
+      if (dist[n2] >= 0) continue;
+      if (ignoreDoors ? MZ.tiles[mzGap(Math.min(c, n2) % N, (Math.min(c, n2) / N) | 0, n2 - c === 1 || c - n2 === 1 ? 'V' : 'H')] : !mzOpenEdge(c, n2)) continue;
+      dist[n2] = dist[c] + 1;
+      q.push(n2);
+    }
+  }
+  return dist;
+}
+function mzFlow() {
+  const N = MZ.N, from = mzCellOf(player.x, player.y);
+  const dist = mzBFS(from, false);
+  const flow = new Int16Array(N * N).fill(-1);
+  for (let c = 0; c < N * N; c++) {
+    if (dist[c] <= 0) continue;
+    const cx = c % N, cy = (c / N) | 0;
+    const nb = [];
+    if (cx > 0) nb.push(c - 1);
+    if (cx < N - 1) nb.push(c + 1);
+    if (cy > 0) nb.push(c - N);
+    if (cy < N - 1) nb.push(c + N);
+    for (const n2 of nb) if (dist[n2] >= 0 && dist[n2] < dist[c] && mzOpenEdge(c, n2)) { flow[c] = n2; break; }
+  }
+  MZ.flow = flow;
+  MZ.fdist = dist;
+}
+function mzWaypoint(x, y) {
+  const c = mzCellOf(x, y);
+  if (!MZ.flow || c === mzCellOf(player.x, player.y)) return null;
+  const nxt = MZ.flow[c];
+  if (nxt < 0) return null;
+  return mzCellCenter(nxt);
+}
+function mzSpawnPos() {
+  // клетка в 2-4 переходах от игрока по открытым коридорам
+  const N = MZ.N, opts = [];
+  if (MZ.fdist) for (let c = 0; c < N * N; c++) if (MZ.fdist[c] >= 2 && MZ.fdist[c] <= 4) opts.push(c);
+  const c = opts.length ? opts[(Math.random() * opts.length) | 0] : (Math.random() * N * N) | 0;
+  const ctr = mzCellCenter(c);
+  return { x: ctr.x + rnd(-70, 70), y: ctr.y + rnd(-70, 70) };
+}
+const mzSpikes = [];
+function mzSpike(tp) {
+  mzSpikes.push({ x: tp.x, y: tp.y, t: 0.95 });
+}
+function mazeTick(dt) {
+  MZ.flowT -= dt;
+  if (MZ.flowT <= 0) { MZ.flowT = 0.6; mzFlow(); }
+  const speedUp = 1 + (5 - MZ.nodesLeft) * 0.14; // корни злее с каждым узлом
+  for (const d of MZ.doors) {
+    if (d.warn > 0) {
+      d.warn -= dt;
+      if (d.warn <= 0) { d.closed = true; d.t = rnd(5, 9); mzFlow(); }
+    } else {
+      d.t -= dt * (d.closed ? 1 : speedUp);
+      if (d.t <= 0) {
+        if (d.closed) { d.closed = false; d.t = rnd(8, 14); mzFlow(); }
+        else d.warn = 1.5;
+      }
+    }
+  }
+  for (let i = mzSpikes.length - 1; i >= 0; i--) {
+    const s2 = mzSpikes[i];
+    s2.t -= dt;
+    if (s2.t <= 0) {
+      mzSpikes.splice(i, 1);
+      burst(s2.x, s2.y, '#d47ba8', 14);
+      addRing(s2.x, s2.y, 52, '#d47ba8', 0.3, 4);
+      SFX.thud();
+      if (!player.down && d2(player.x, player.y, s2.x, s2.y) < 52 * 52) damagePlayer(SEC().boss.dmg * 0.6);
+    }
+  }
+  // вход в сердце
+  if (MZ.gateOpen && !MZ.bossGo && mzCellOf(player.x, player.y) === MZ.heart) {
+    MZ.bossGo = true;
+    spawnBoss(MZ.hx, MZ.hy);
+  }
+}
+function mazeNodeDown(e) {
+  MZ.nodesLeft--;
+  burst(e.x, e.y, '#d47ba8', 26);
+  addRing(e.x, e.y, 180, '#d47ba8', 0.5, 6);
+  SFX.boom();
+  shake = Math.min(16, shake + 8);
+  pickups.push({ x: e.x + rnd(-20, 20), y: e.y + rnd(-20, 20), k: 'log', ph: rnd(TAU) });
+  for (let k = 0; k < 8; k++) pushGem(e.x + rnd(-30, 30), e.y + rnd(-30, 30), 4);
+  addScrap(15);
+  if (MZ.nodesLeft > 0) {
+    announce('УЗЕЛ ВЫЖЖЕН · ОСТАЛОСЬ ' + MZ.nodesLeft);
+    radioSay(rp(RADIO.node9));
+  } else {
+    MZ.gateOpen = true;
+    mzFlow();
+    announce('✦ ПУТЬ К СЕРДЦУ ОТКРЫТ');
+    radioSay(rp(RADIO.gate9), true);
+    SFX.beam();
+  }
+}
 const dug = new Set(), rockDmg = new Map();
 let cutFxT = 0, cutHint = false;
 const rkey = (gx, gy) => (gx + 32768) * 65536 + (gy + 32768);
 /* 0 — пусто, 1 — завал, 2 — скрап-жила; детерминированно по клетке */
 function rockAt(gx, gy) {
   if (!SEC().rocks) return 0;
+  if (SEC().maze) return mazeAt(gx, gy);
   const cxp = gx * CS2 + CS2 / 2, cyp = gy * CS2 + CS2 / 2;
   if (cxp * cxp + cyp * cyp < 200 * 200) return 0; // чистая зона старта
   if (dug.has(rkey(gx, gy))) return 0;
@@ -2290,6 +2576,10 @@ function rockAt(gx, gy) {
   return hash(gx + 555, gy - 333) < 0.13 ? 2 : 1;
 }
 function damageRock(gx, gy, typ, dmg, cx, cy, byPlayer) {
+  if (typ >= 3) {
+    if (byPlayer && cutFxT <= 0) { cutFxT = 0.12; SFX.cut(); }
+    return; // корни Корневища резаку не по зубам
+  }
   const k = rkey(gx, gy);
   const dealt = (rockDmg.get(k) || 0) + dmg;
   if (byPlayer) {
@@ -2371,7 +2661,10 @@ function spawn(type, px, py) {
   const pal = S.pal[type];
   let sx = px !== undefined ? px : player.x + Math.cos(a) * dst;
   let sy = py !== undefined ? py : player.y + Math.sin(a) * dst;
-  if (px === undefined && S.rocks) {
+  if (px === undefined && S.maze && MZ.on && type !== 'boss') {
+    const p2 = mzSpawnPos();
+    sx = p2.x; sy = p2.y;
+  } else if (px === undefined && S.rocks) {
     for (let tr = 0; tr < 6 && rockAt(Math.floor(sx / CS2), Math.floor(sy / CS2)); tr++) {
       const a2 = rnd(TAU);
       sx = player.x + Math.cos(a2) * dst;
@@ -2394,13 +2687,13 @@ function spawn(type, px, py) {
     e.col = B.col; e.col2 = B.col2; e.kind = B.kind;
   }
 }
-function spawnBoss() {
+function spawnBoss(px, py) {
   bossActive = true;
-  spawn('boss');
+  spawn('boss', px, py);
   $('bossname').textContent = SEC().boss.name;
   $('bossbar').classList.add('on');
   announce(SEC().boss.ann);
-  radioSay(SEC().boss.kind === 'bloom' ? RADIO.bossB : RADIO.bossG, true);
+  radioSay(SEC().boss.kind === 'heart' ? RADIO.bossH : SEC().boss.kind === 'bloom' ? RADIO.bossB : RADIO.bossG, true);
   MUS.setIntensity(3);
   SFX.boss();
   shake = Math.min(18, shake + 12);
@@ -2429,6 +2722,7 @@ function spawner(dt) {
   }
 }
 function killEnemy(e, i) {
+  if (e.t === 'node') { enemies.splice(i, 1); mazeNodeDown(e); return; }
   enemies.splice(i, 1);
   kills++;
   SAVE.stats.kills++;
@@ -2437,6 +2731,7 @@ function killEnemy(e, i) {
   if (kills === 100) radioOnce('k1', rp(RADIO.k100));
   if (kills === 300) radioOnce('k3', rp(RADIO.k300));
   const bk = e.t === 'boss' ? e.kind : e.t;
+  if (SAVE.besti[bk] === undefined) SAVE.besti[bk] = 0;
   if (SAVE.besti[bk] !== undefined) SAVE.besti[bk]++;
   if (player.vamp && Math.random() < player.vamp) player.hp = Math.min(player.maxHp, player.hp + 3);
   if (Math.random() < 0.34) { addScrap(1); }
@@ -2453,8 +2748,9 @@ function killEnemy(e, i) {
     SAVE.stats.elites++;
     addScrap(8);
     dropPickup(e.x, e.y);
-    const list = SAVE.sector === 1 ? LOGS2 : LOGS;
-    const cnt = SAVE.sector === 1 ? SAVE.logs2 : SAVE.logs;
+    const list = SAVE.sector === 2 ? LOGS3 : SAVE.sector === 1 ? LOGS2 : LOGS;
+    const cnt = SAVE.sector === 2 ? (SAVE.logs3 || 0) : SAVE.sector === 1 ? SAVE.logs2 : SAVE.logs;
+    if (SAVE.sector === 2) return; // в Корневище записи хранят узлы, не элиты
     const logChance = cnt >= list.length ? 0 : (cnt === 0 && foundThisRun === 0 ? 1 : 0.5 + player.luck * 0.06);
     if (Math.random() < logChance) pickups.push({ x: e.x + rnd(-30, 30), y: e.y + rnd(-30, 30), k: 'log', ph: rnd(TAU) });
     for (let k = 0; k < 6; k++) pushGem(e.x + rnd(-26, 26), e.y + rnd(-26, 26), 4);
@@ -2577,6 +2873,7 @@ function victory() {
   addScrap(200);
   SAVE.wins++;
   if (SAVE.sector === 1) SAVE.wins2++;
+  if (SAVE.sector === 2) SAVE.wins3 = (SAVE.wins3 || 0) + 1;
   let unlockMsg = '';
   if (SAVE.sector + 1 < SECTORS.length && SAVE.unlocked < SAVE.sector + 2) {
     SAVE.unlocked = SAVE.sector + 2;
@@ -2872,7 +3169,7 @@ function update(dt) {
     lastMinute = min;
     addScrap(10);
     if (min < 10 && SEC().ch[min]) announce(SEC().ch[min]);
-    if (min === 10 && !bossActive) spawnBoss();
+    if (min === 10 && !bossActive && !SEC().maze) spawnBoss();
     if (min >= 2 && MUS.inten > 0 && MUS.inten < 2) MUS.setIntensity(2);
     if (RADIO['m' + min]) radioOnce('m' + min, rp(RADIO['m' + min]));
     killsThisMin = 0;
@@ -2940,6 +3237,7 @@ function update(dt) {
   }
 
   spawner(dt);
+  if (MZ.on) mazeTick(dt);
   if (!player.down) weapons(dt);
   if (NET.role === 'host' && NET.ready && NET.ally && NET.ally.hp > 0) withAlly(() => weapons(dt));
 
@@ -3020,10 +3318,16 @@ function update(dt) {
 
   // враги
   for (const e of enemies) {
+    if (e.t === 'node') { e.hitT = Math.max(0, e.hitT - dt); e.wob += dt; continue; }
     const aliveA = NET.ready && NET.role === 'host' && NET.ally && NET.ally.hp > 0 && !NET.ally.down;
     const tp = (player.down && aliveA) ? NET.ally
       : (aliveA && d2(NET.ally.x, NET.ally.y, e.x, e.y) < d2(player.x, player.y, e.x, e.y)) ? NET.ally : player;
-    const dx = tp.x - e.x, dy = tp.y - e.y;
+    let tpx = tp.x, tpy = tp.y;
+    if (MZ.on && e.t !== 'boss') {
+      const wpt = mzWaypoint(e.x, e.y);
+      if (wpt) { tpx = wpt.x; tpy = wpt.y; }
+    }
+    const dx = tpx - e.x, dy = tpy - e.y;
     const d = Math.hypot(dx, dy) || 1;
     e.wob += dt * 4;
     e.atk -= dt; e.dcd -= dt; e.satk -= dt; e.hitT = Math.max(0, e.hitT - dt);
@@ -3039,7 +3343,32 @@ function update(dt) {
         }
         announce(e.kind === 'bloom' ? 'ПЫЛЬЦА ГУСТЕЕТ' : 'САД ПРОРАСТАЕТ');
       }
-      if (e.kind === 'bloom') {
+      if (e.kind === 'heart') {
+        e.wob += dt;
+        e.sumT -= dt;
+        if (e.sumT <= 0) {
+          e.sumT = 6.5;
+          for (let k = 0; k < 7; k++) {
+            const a4 = TAU * k / 7;
+            spawn(k < 2 ? 'spit' : 'runner', e.x + Math.cos(a4) * 130, e.y + Math.sin(a4) * 130);
+          }
+          announce('КОРНИ ОТВЕЧАЮТ');
+        }
+        e.dashT -= dt;
+        if (e.dashT <= 0) {
+          e.dashT = 4.4;
+          const off3 = rnd(TAU);
+          for (let k = 0; k < 16; k++) {
+            const a5 = off3 + TAU * k / 16;
+            eShots.push({ x: e.x, y: e.y, vx: Math.cos(a5) * 150, vy: Math.sin(a5) * 150, r: 6, dmg: 16, life: 5, ph: rnd(TAU) });
+          }
+          e.hitT = Math.max(e.hitT, 0.15);
+          SFX.boss();
+          shake = Math.min(14, shake + 5);
+        }
+        e.teleT -= dt;
+        if (e.teleT <= 0) { e.teleT = 2.4; mzSpike(tp); mzSpike({ x: tp.x + rnd(-90, 90), y: tp.y + rnd(-90, 90) }); }
+      } else if (e.kind === 'bloom') {
         e.dashT -= dt;
         e.x += dx / d * e.spd * dt;
         e.y += dy / d * e.spd * dt;
@@ -3298,10 +3627,10 @@ function update(dt) {
 /* найдена запись */
 function openLog() {
   if (NET.role === 'host' && NET.ready) { netSend(NET.dcR, { t: 'ev', k: 'lvo2' }); }
-  const isS8 = SAVE.sector === 1;
-  const entry = isS8 ? LOGS2[SAVE.logs2] : LOGS[SAVE.logs];
+  const isS8 = SAVE.sector === 1, isS9 = SAVE.sector === 2;
+  const entry = isS9 ? LOGS3[SAVE.logs3 || 0] : isS8 ? LOGS2[SAVE.logs2] : LOGS[SAVE.logs];
   if (!entry) return;
-  if (isS8) SAVE.logs2++; else SAVE.logs++;
+  if (isS9) SAVE.logs3 = (SAVE.logs3 || 0) + 1; else if (isS8) SAVE.logs2++; else SAVE.logs++;
   foundThisRun++;
   addScrap(5);
   checkAch();
@@ -3396,7 +3725,24 @@ function draw() {
       const typ = rockAt(gx, gy);
       if (!typ) continue;
       const rx = gx * CS2, ry = gy * CS2;
-      ctx.drawImage(SPRC[typ === 2 ? 'vein' : 'rock'][0], rx, ry);
+      if (typ >= 3) {
+        const memb = typ === 4;
+        ctx.fillStyle = memb ? '#43203a' : '#161019';
+        ctx.fillRect(rx, ry, CS2, CS2);
+        const vv = hash(gx * 3, gy * 7);
+        ctx.fillStyle = memb
+          ? 'rgba(212,123,168,' + (0.22 + 0.18 * Math.sin(time * 5 + gx + gy)) + ')'
+          : 'rgba(122,106,154,0.14)';
+        ctx.fillRect(rx + 6 + vv * 26, ry + 4, 3, CS2 - 8);
+        if (!memb && hash(gx + 7, gy - 3) < 0.65) {
+          ctx.fillStyle = 'rgba(20,14,24,0.5)';
+          ctx.fillRect(rx + 30 - vv * 22, ry + 10, 4, CS2 - 20);
+        }
+        if (!memb && hash(gx, gy) < 0.055) {
+          ctx.fillStyle = 'rgba(159,220,196,' + (0.25 + 0.3 * Math.abs(Math.sin(time * 1.7 + gx * 5 + gy * 3))) + ')';
+          ctx.fillRect(rx + 22 + vv * 10, ry + 26, 5, 5);
+        }
+      } else ctx.drawImage(SPRC[typ === 2 ? 'vein' : 'rock'][0], rx, ry);
       if (typ === 2) {
         const pu = Math.max(0, 0.3 + Math.sin(time * 4 + gx * 3 + gy) * 0.35);
         ctx.fillStyle = 'rgba(245,216,120,' + pu + ')';
@@ -3562,6 +3908,47 @@ function draw() {
       if (SAVE.sector === 1 && SPRC[key + '_8']) key += '_8';
       fi = e.t === 'spit' ? (e.shT < 0.6 ? 0 : 1) : Math.floor(e.wob * 1.6) % 2;
     }
+    if (e.t === 'boss' && e.kind === 'heart') {
+      const pu = 0.5 + 0.5 * Math.sin(time * 2.1);
+      const beat = 1 + 0.05 * Math.sin(time * 5.6) + 0.03 * Math.sin(time * 11.2);
+      ctx.fillStyle = 'rgba(212,123,168,' + (0.08 + pu * 0.08) + ')';
+      ctx.beginPath(); ctx.arc(e.x, e.y, (e.r + 34 + pu * 10) * beat, 0, TAU); ctx.fill();
+      ctx.fillStyle = e.hitT > 0 ? '#f0c8dc' : '#7c3457';
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r * beat, 0, TAU); ctx.fill();
+      ctx.fillStyle = e.hitT > 0 ? '#fff' : '#a34a76';
+      ctx.beginPath(); ctx.arc(e.x - e.r * 0.3, e.y - e.r * 0.25, e.r * 0.42 * beat, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x + e.r * 0.32, e.y + e.r * 0.3, e.r * 0.3 * beat, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(212,123,168,0.5)';
+      ctx.lineWidth = 4;
+      for (let k = 0; k < 5; k++) {
+        const aV = TAU * k / 5 + 0.4;
+        ctx.beginPath();
+        ctx.moveTo(e.x + Math.cos(aV) * e.r * 0.9, e.y + Math.sin(aV) * e.r * 0.9);
+        ctx.lineTo(e.x + Math.cos(aV) * (e.r + 46), e.y + Math.sin(aV) * (e.r + 46));
+        ctx.stroke();
+      }
+      // силуэт у сердца — она всё ещё здесь
+      ctx.fillStyle = 'rgba(20,12,18,0.9)';
+      ctx.fillRect(e.x - 5, e.y + e.r * 0.35, 10, 20);
+      ctx.beginPath(); ctx.arc(e.x, e.y + e.r * 0.35 - 4, 6, 0, TAU); ctx.fill();
+      continue;
+    }
+    if (e.t === 'node') {
+      const pu = 0.5 + 0.5 * Math.sin(e.wob * 2.4);
+      ctx.fillStyle = 'rgba(212,123,168,' + (0.10 + pu * 0.10) + ')';
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 14 + pu * 6, 0, TAU); ctx.fill();
+      ctx.fillStyle = e.hitT > 0 ? '#f0c8dc' : '#8a3d63';
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r + pu * 2.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = e.hitT > 0 ? '#fff' : '#d47ba8';
+      ctx.beginPath(); ctx.arc(e.x - 6, e.y - 5, 7 + pu * 2, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x + 7, e.y + 6, 5, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(212,123,168,0.7)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 9, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(e.hp / e.mhp, 0, 1));
+      ctx.stroke();
+      continue;
+    }
     drawSpr(SPRC[key], fi, e.x, e.y, e.r, flip);
     const tele = e.t === 'boss' && e.kind !== 'bloom' && e.mode === 'tele' && Math.floor(e.teleT * 10) % 2 === 0;
     if (tele || e.hitT > 0) {
@@ -3684,6 +4071,57 @@ function draw() {
     ctx.fillRect(A.x - 15, A.y - 27, 30, 4);
     ctx.fillStyle = '#6ec3c9';
     ctx.fillRect(A.x - 15, A.y - 27, 30 * clamp(A.hp / A.maxHp, 0, 1), 4);
+  }
+
+  if (MZ.on) {
+    // телеграфы шипов сердца
+    for (const s3 of mzSpikes) {
+      const fr2 = 1 - s3.t / 0.95;
+      ctx.strokeStyle = 'rgba(212,123,168,' + (0.35 + fr2 * 0.5) + ')';
+      ctx.lineWidth = 2 + fr2 * 2;
+      ctx.beginPath(); ctx.arc(s3.x, s3.y, 52 * (0.4 + fr2 * 0.6), 0, TAU); ctx.stroke();
+    }
+    // мембраны, готовые закрыться — предупреждающий пульс
+    for (const d of MZ.doors) {
+      if (d.warn <= 0) continue;
+      for (const ti of d.tiles) {
+        const tx = (ti % MZ.GW + MZ.g0) * CS2, ty = ((ti / MZ.GW | 0) + MZ.g0) * CS2;
+        ctx.fillStyle = 'rgba(212,123,168,' + (0.14 + 0.22 * Math.abs(Math.sin(time * 9))) + ')';
+        ctx.fillRect(tx, ty, CS2, CS2);
+      }
+    }
+    // полумрак Корневища: свет только вокруг резчика
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const lx = player.x - cam.x, ly = player.y - cam.y;
+    const gCache = ctx.createRadialGradient(lx, ly, 150, lx, ly, 470);
+    gCache.addColorStop(0, 'rgba(5,6,9,0)');
+    gCache.addColorStop(0.6, 'rgba(5,6,9,0.55)');
+    gCache.addColorStop(1, 'rgba(4,5,8,0.93)');
+    ctx.fillStyle = gCache;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+    // проводник: стрелка к ближнему узлу, после зачистки — к сердцу
+    let tgt2 = null, tCol = '#d47ba8';
+    if (MZ.nodesLeft > 0) {
+      let bd = 1e18;
+      for (const e of enemies) if (e.t === 'node') {
+        const dd2 = d2(e.x, e.y, player.x, player.y);
+        if (dd2 < bd) { bd = dd2; tgt2 = e; }
+      }
+    } else if (!MZ.bossGo) { tgt2 = { x: MZ.hx, y: MZ.hy }; tCol = '#f0c8dc'; }
+    if (tgt2 && d2(tgt2.x, tgt2.y, player.x, player.y) > 300 * 300) {
+      const aA = Math.atan2(tgt2.y - player.y, tgt2.x - player.x);
+      const axp = player.x + Math.cos(aA) * 120, ayp = player.y + Math.sin(aA) * 120;
+      ctx.save();
+      ctx.translate(axp, ayp);
+      ctx.rotate(aA);
+      ctx.fillStyle = tCol;
+      ctx.globalAlpha = 0.5 + 0.4 * Math.sin(time * 5);
+      ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-7, -7); ctx.lineTo(-7, 7); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // подъём павшего: крест и зелёное кольцо прогресса
@@ -4151,6 +4589,13 @@ function renderCodex() {
   } else {
     LOGS2.forEach((l, i) => box.appendChild(logRow(l, i, SAVE.logs2)));
   }
+  if (SAVE.unlocked >= 3) {
+    const h3 = document.createElement('div');
+    h3.className = 'sech';
+    h3.textContent = 'КОРНЕВИЩЕ — ГОЛОС МАРТЫ';
+    box.appendChild(h3);
+    LOGS3.forEach((l, i) => box.appendChild(logRow(l, i, SAVE.logs3 || 0)));
+  }
 }
 $('shopOpenB').onclick = () => { audioInit(); state = 'shop'; renderShop(); hide('start'); show('shop'); };
 $('shopBackB').onclick = () => { state = 'menu'; renderMenu(); hide('shop'); show('start'); };
@@ -4238,12 +4683,15 @@ function startRun() {
   reset();
   hide('start'); hide('over'); hide('victory'); hide('brief');
   document.body.classList.add('ingame');
+  MZ.on = false;
+  mzSpikes.length = 0;
+  if (SEC().maze) mazeGen();
   state = 'play';
   player.down = false;
   NET.revT = 0;
   MUS.setSector();
   MUS.setIntensity(1);
-  radioSay(rp(SAVE.sector === 1 ? RADIO.start.concat(RADIO.start8) : RADIO.start));
+  radioSay(rp(SAVE.sector === 2 ? RADIO.start9 : SAVE.sector === 1 ? RADIO.start.concat(RADIO.start8) : RADIO.start));
   if (NET.ready) {
     survAt = 1e9;
     if (NET.role === 'host' && NET.ally) {
@@ -4398,6 +4846,19 @@ DEV.coopSim = () => {
 DEV.coopPick = m => applyGuestPick(m);
 DEV.coopXp = v => allyGainXP(v);
 DEV.coopHurtAlly = d => { if (NET.ally) NET.ally.hp = Math.max(0, NET.ally.hp - d); };
+DEV.mz = () => MZ;
+DEV.mzBFS = () => mzBFS(mzCellOf(player.x, player.y), false);
+DEV.enemyCount = () => enemies.filter(e => e.t !== 'node').length;
+DEV.killNodes = () => { for (let i = enemies.length - 1; i >= 0; i--) if (enemies[i].t === 'node') { enemies[i].hp = 0; killEnemy(enemies[i], i); } };
+DEV.tp = (x, y) => { player.x = x; player.y = y; };
+DEV.bossKind = () => { const b = enemies.find(e => e.t === 'boss'); return b ? b.kind : 'нет'; };
+DEV.spikes = () => mzSpikes.length;
+DEV.mzEdge = (a, b) => {
+  const N = MZ.N, lo = Math.min(a, b);
+  const ax = Math.abs(a - b) === 1 ? 'V' : 'H';
+  const gi = mzGap(lo % N, (lo / N) | 0, ax);
+  return { ax, gapTile: MZ.tiles[gi], door: MZ.doorMap[gi], gate: MZ.gateMap[gi], open: mzOpenEdge(a, b) };
+};
 DEV.coopMoveAlly = (x, y) => { if (NET.ally) { NET.ally.x = x; NET.ally.y = y; } };
 DEV.guestSim = snap => {
   const ch = { readyState: 'open', send() {} };
