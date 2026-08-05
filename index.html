@@ -4413,7 +4413,7 @@ function renderBrief() {
     const b = document.createElement('button');
     b.className = 'char' + (SAVE.sector === i ? ' sel' : '') + (open ? '' : ' locked');
     b.innerHTML = '<b>' + s.n + ' · ' + s.sub + '</b><span>' +
-      (open ? s.d : '🔒 Победи Садовника в секторе 07') + '</span>';
+      (open ? s.d : '🔒 Ключ — ' + SECTORS[i - 1].boss.name + ': победи его в секторе ' + SECTORS[i - 1].n.slice(-2)) + '</span>';
     b.onclick = () => {
       audioInit();
       if (!open) { SFX.hurt(); return; }
