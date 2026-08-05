@@ -2298,7 +2298,8 @@ function gainXP(v) {
 /* ================= копаемый мир (сектор 08) ================= */
 const CS2 = 56, ROCK_HP = [0, 40, 70, 1e9, 1e9];
 /* ===== сектор 09: лабиринт Корневища ===== */
-const MZ = { on: false, N: 13, P: 7, g0: -46, tiles: null, GW: 93, doors: [], doorMap: {},
+const MZ = { on: false, N: 21, P: 7, g0: -74, tiles: null, GW: 149, doors: [], doorMap: {},
+  seen: null,
   gateMap: {}, gateOpen: false, flow: null, fdist: null, flowT: 0, hx: 0, hy: 0,
   heart: -1, bossGo: false, nodesLeft: 0, warnCol: 0 };
 const mzKey = (gx, gy) => (gx - MZ.g0) + (gy - MZ.g0) * MZ.GW;
@@ -2436,14 +2437,14 @@ function mazeGen() {
   const cand = [];
   for (let c = 0; c < N * N; c++) {
     const cx = c % N, cy = (c / N) | 0;
-    if (c !== heart && dist[c] >= 6 && Math.abs(cx - hcx) + Math.abs(cy - hcy) >= 2) cand.push(c);
+    if (c !== heart && dist[c] >= 8 && Math.abs(cx - hcx) + Math.abs(cy - hcy) >= 3) cand.push(c);
   }
   cand.sort((a, b) => dist[b] - dist[a]);
   const nodes = [];
   for (const c of cand) {
     if (nodes.length >= 5) break;
     const cx = c % N, cy = (c / N) | 0;
-    if (nodes.every(n2 => Math.abs(n2 % N - cx) + Math.abs(((n2 / N) | 0) - cy) >= 4)) nodes.push(c);
+    if (nodes.every(n2 => Math.abs(n2 % N - cx) + Math.abs(((n2 / N) | 0) - cy) >= 6)) nodes.push(c);
   }
   for (const c of cand) {
     if (nodes.length >= 5) break;
@@ -2452,10 +2453,11 @@ function mazeGen() {
   MZ.nodesLeft = nodes.length;
   for (const c of nodes) {
     const p2 = mzCellCenter(c);
-    enemies.push({ t: 'node', x: p2.x, y: p2.y, r: 24, hp: 1050, mhp: 1050, spd: 0, dmg: 0,
-      xp: 40, col: '#d47ba8', col2: '#5a2840', id: NET.eid++, atk: 0, dcd: 0, hitT: 0,
+    enemies.push({ t: 'node', x: p2.x, y: p2.y, r: 24, hp: 1400, mhp: 1400, spd: 0, dmg: 0,
+      xp: 45, col: '#d47ba8', col2: '#5a2840', id: NET.eid++, atk: 0, dcd: 0, hitT: 0,
       wob: rnd(TAU), shT: 2, satk: 0, mode: 'idle', dashT: 5, teleT: 0, sumT: 8, vx: 0, vy: 0 });
   }
+  MZ.seen = new Uint8Array(N * N);
   mzFlow();
 }
 function mzGap(cx, cy, ax) {
@@ -2542,6 +2544,7 @@ function mzSpike(tp) {
   mzSpikes.push({ x: tp.x, y: tp.y, t: 0.95 });
 }
 function mazeTick(dt) {
+  if (MZ.seen) MZ.seen[mzCellOf(player.x, player.y)] = 1;
   MZ.flowT -= dt;
   if (MZ.flowT <= 0) { MZ.flowT = 0.6; mzFlow(); }
   const speedUp = 1 + (5 - MZ.nodesLeft) * 0.14; // корни злее с каждым узлом
@@ -2908,7 +2911,10 @@ function victory() {
   addScrap(200);
   SAVE.wins++;
   if (SAVE.sector === 1) SAVE.wins2++;
-  if (SAVE.sector === 2) SAVE.wins3 = (SAVE.wins3 || 0) + 1;
+  if (SAVE.sector === 2) {
+    SAVE.wins3 = (SAVE.wins3 || 0) + 1;
+    if ((SAVE.logs3 || 0) === LOGS3.length - 1) SAVE.logs3 = LOGS3.length; // последняя запись — при ней
+  }
   let unlockMsg = '';
   if (SAVE.sector + 1 < SECTORS.length && SAVE.unlocked < SAVE.sector + 2) {
     SAVE.unlocked = SAVE.sector + 2;
@@ -4132,6 +4138,35 @@ function draw() {
     gCache.addColorStop(1, 'rgba(4,5,8,0.93)');
     ctx.fillStyle = gCache;
     ctx.fillRect(cam.x - 80, cam.y - 80, W + 160, H + 160);
+    // тактическая карта: туман войны, узлы, сердце
+    if (MZ.seen) {
+      const mS = 4, mW = MZ.N * mS;
+      const mx0 = cam.x + W - mW - 14, my0 = cam.y + 64;
+      ctx.fillStyle = 'rgba(6,7,10,0.72)';
+      ctx.fillRect(mx0 - 4, my0 - 4, mW + 8, mW + 8);
+      ctx.strokeStyle = 'rgba(212,123,168,0.35)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(mx0 - 4, my0 - 4, mW + 8, mW + 8);
+      ctx.fillStyle = 'rgba(122,106,154,0.5)';
+      for (let c = 0; c < MZ.N * MZ.N; c++) {
+        if (!MZ.seen[c]) continue;
+        ctx.fillRect(mx0 + (c % MZ.N) * mS, my0 + ((c / MZ.N) | 0) * mS, mS - 1, mS - 1);
+      }
+      const blink = 0.5 + 0.5 * Math.sin(time * 5);
+      ctx.fillStyle = 'rgba(212,123,168,' + (0.55 + blink * 0.45) + ')';
+      for (const e of enemies) {
+        if (e.t !== 'node') continue;
+        const c = mzCellOf(e.x, e.y);
+        ctx.fillRect(mx0 + (c % MZ.N) * mS, my0 + ((c / MZ.N) | 0) * mS, mS - 1, mS - 1);
+      }
+      if (MZ.nodesLeft === 0) {
+        ctx.fillStyle = 'rgba(240,200,220,' + (0.6 + blink * 0.4) + ')';
+        ctx.fillRect(mx0 + (MZ.heart % MZ.N) * mS - 1, my0 + ((MZ.heart / MZ.N) | 0) * mS - 1, mS + 1, mS + 1);
+      }
+      const pc2 = mzCellOf(player.x, player.y);
+      ctx.fillStyle = '#e8dcc4';
+      ctx.fillRect(mx0 + (pc2 % MZ.N) * mS, my0 + ((pc2 / MZ.N) | 0) * mS, mS - 1, mS - 1);
+    }
     // проводник: стрелка к ближнему узлу, после зачистки — к сердцу
     let tgt2 = null, tCol = '#d47ba8';
     if (MZ.nodesLeft > 0) {
