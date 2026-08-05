@@ -130,7 +130,6 @@ button.ghost:active{background:rgba(232,220,196,.12)}
   padding:2px 6px;margin-left:7px;vertical-align:1px;font-style:normal}
 .mrow.melt{border-left-color:#e88a4a}
 .supline{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;justify-content:center;align-items:center}
-.supl{font-size:9px;letter-spacing:.24em;color:var(--dim)}
 .chip2{pointer-events:auto;font-family:inherit;font-size:9.5px;letter-spacing:.1em;padding:7px 9px;
   background:transparent;border:1px solid rgba(232,220,196,.35);color:var(--ink);cursor:pointer}
 .chip2.sel{border-color:var(--gold);color:var(--gold);box-shadow:0 0 8px rgba(224,178,58,.25)}
@@ -147,8 +146,6 @@ html,body{overscroll-behavior:none}
 #radio{left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px))}
 .netin{width:170px;background:#0c0a07;border:1px solid rgba(159,220,60,.5);color:var(--acid);
   font-family:inherit;font-size:24px;letter-spacing:.3em;text-align:center;padding:9px;pointer-events:auto}
-.netdet{margin-top:16px;font-size:10px}
-.netdet summary{color:var(--cy);cursor:pointer;letter-spacing:.14em}
 .char{pointer-events:auto;flex:1;font-family:inherit;cursor:pointer;text-align:left;
   background:rgba(232,220,196,.05);border:1px solid rgba(232,220,196,.25);color:var(--ink);padding:10px 10px 9px}
 .char b{display:block;font-size:11.5px;letter-spacing:.14em;margin-bottom:4px}
@@ -376,6 +373,7 @@ html,body{overscroll-behavior:none}
     <div class="story" id="epiText"></div>
     <div id="vstats"></div>
     <div class="btnrow">
+      <button id="vAgainB" class="big" style="margin-top:0;display:none">ЕЩЁ РАЗ</button>
       <button id="vBaseB" class="big" style="margin-top:0">В СХРОН</button>
     </div>
   </div>
@@ -657,7 +655,7 @@ function relayURL() {
   return RELAY_URL;
 }
 const NET = { role: null, ready: false, pc: null, dcR: null, dcU: null, code: '',
-  ping: 0, ally: null, eid: 1, gEn: {}, sendT: 0, pingT: 0, auraT: 0, lastHp: 999,
+  ping: 0, ally: null, eid: 1, gEn: {}, sendT: 0, pingT: 0, lastHp: 999,
   wp2: {}, g2lvl: {}, gp: 0, pend: 0, allyAuraR: 0 };
 function netSend(ch, obj) {
   try { if (ch && ch.readyState === 'open') ch.send(JSON.stringify(obj)); } catch (e) {}
@@ -675,11 +673,7 @@ function netMakePC() {
     const custom = JSON.parse(localStorage.getItem('pustosh-turn') || 'null');
     if (custom && custom.urls) ice.push(custom);
   } catch (e) {}
-  const pc = new RTCPeerConnection({ iceServers: ice.concat([
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-  ]) });
+  const pc = new RTCPeerConnection({ iceServers: ice });
   NET.pc = pc;
   pc.onconnectionstatechange = () => {
     if (['failed', 'disconnected', 'closed'].indexOf(pc.connectionState) < 0) return;
@@ -746,6 +740,7 @@ async function netGuestAnswer(offerB64) {
 async function netHostAccept(ansB64) { await NET.pc.setRemoteDescription(b64d(ansB64)); }
 
 function wsConnect(slot, code) {
+  if (NET.ws) { try { NET.ws.onclose = null; NET.ws.close(); } catch (e) {} NET.ws = null; }
   let ws;
   try { ws = new WebSocket(relayURL()); } catch (e) { coopStatus('нет связи со Схроном — проверь интернет'); return; }
   NET.ws = ws;
@@ -844,7 +839,6 @@ function buildSnap() {
     a: [Math.round(NET.ally.hp), Math.round(NET.ally.maxHp), Math.round((NET.ally.xp || 0) / (NET.ally.xpNext || 100) * 100), NET.ally.lvl || 1, NET.ally.down ? 1 : 0],
     rv: Math.round(Math.min(1, (NET.revT || 0) / 3) * 100),
     tm: Math.round(time * 10) / 10, kl: kills, sc: Math.round(runScrap),
-    lv: player.lvl, xp: Math.round(player.xp / player.xpNext * 100),
     q: NET.seq, bs: be ? Math.round(be.hp / be.mhp * 100) : -1, pg: NET.ping, en, bu, gm,
     po: pools.slice(0, 12).map(p => [Math.round(p.x), Math.round(p.y), Math.round(p.r), Math.round(clamp(p.t / p.max, 0, 1) * 9)]),
     mi: mines.slice(0, 10).map(m => [Math.round(m.x), Math.round(m.y), m.arm <= 0 ? 1 : 0]),
@@ -2600,6 +2594,7 @@ function victory() {
   show('victory');
   MUS.setIntensity(0);
   if (NET.role === 'host' && NET.ready) netSend(NET.dcR, { t: 'ev', k: 'win' });
+  $('vAgainB').style.display = (NET.role === 'host' && NET.ready) ? '' : 'none';
   SFX.win();
 }
 
@@ -3184,10 +3179,10 @@ function update(dt) {
   const coopA = (NET.ready && NET.role === 'host' && NET.ally && NET.ally.hp > 0) ? NET.ally : null;
   for (let i = gems.length - 1; i >= 0; i--) {
     const g = gems[i];
-    let tgt = player;
-    let dx = player.x - g.x, dy = player.y - g.y;
+    let tgt = player.down && coopA ? coopA : player;
+    let dx = tgt.x - g.x, dy = tgt.y - g.y;
     let d = Math.hypot(dx, dy) || 1;
-    if (coopA) {
+    if (coopA && tgt === player) {
       const ax = coopA.x - g.x, ay = coopA.y - g.y;
       const ad = Math.hypot(ax, ay) || 1;
       if (ad < d) { tgt = coopA; dx = ax; dy = ay; d = ad; }
@@ -3208,7 +3203,7 @@ function update(dt) {
   for (let i = pickups.length - 1; i >= 0; i--) {
     const p = pickups[i];
     let who = null;
-    if (d2(p.x, p.y, player.x, player.y) < 28 * 28) who = player;
+    if (!player.down && d2(p.x, p.y, player.x, player.y) < 28 * 28) who = player;
     else if (coopA && d2(p.x, p.y, coopA.x, coopA.y) < 28 * 28) who = coopA;
     if (who) {
       pickups.splice(i, 1);
@@ -4352,6 +4347,7 @@ $('coopEndB').onclick = () => {
 };
 
 $('toBaseB').onclick = () => { if (NET.ready) netDrop(); toBase(); };
+$('vAgainB').onclick = () => { if (NET.ready && NET.role === 'host') coopLaunch(); };
 $('vBaseB').onclick = () => { if (NET.ready) netDrop(); toBase(); };
 $('resumeB').onclick = togglePause;
 $('giveupB').onclick = () => { hide('paused'); gameOver(); };
