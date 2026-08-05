@@ -53,6 +53,8 @@ body.ingame .hud{opacity:1}
 #announce{top:19%;left:0;right:0;text-align:center;font-size:15px;letter-spacing:.34em;
   color:var(--gold);text-shadow:0 0 14px rgba(224,178,58,.5);opacity:0;padding:0 14px}
 #announce.show{animation:ann 2.6s ease forwards}
+@keyframes gopulse{0%,100%{box-shadow:0 0 0 0 rgba(159,220,60,.45)}50%{box-shadow:0 0 22px 4px rgba(159,220,60,.25)}}
+.gopulse{animation:gopulse 1.4s ease-in-out infinite;border-color:var(--acid)!important}
 @keyframes ann{0%{opacity:0;transform:translateY(8px)}12%{opacity:1;transform:none}
   75%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
 #radio{position:fixed;left:12px;bottom:86px;max-width:262px;z-index:13;pointer-events:none;
@@ -781,9 +783,13 @@ function netReady() {
   }
   try { SFX.evolve(); } catch (e) {}
   if (NET.role === 'host') {
-    coopStatus('напарник на связи — веди в бой');
+    coopStatus('напарник на связи — командуй: жми ▶ В БОЙ');
     $('coopStartB').style.display = '';
-  } else coopStatus('связь есть — напарник командует выход');
+    $('coopStartB').classList.add('gopulse');
+  } else {
+    $('coopJoin').style.display = 'none';
+    coopStatus('✓ связь есть · вылазку начинает напарник — жди сигнала, кнопка не нужна');
+  }
 }
 function coopStatus(m) { $('coopStatus').textContent = m; }
 function netDrop() {
@@ -802,6 +808,7 @@ function netDrop() {
   NET.ally = null; NET.gEn = {};
   $('coopLvl').style.display = 'none';
   $('coopStartB').style.display = 'none';
+  $('coopStartB').classList.remove('gopulse');
   if (preGame) coopStatus('связь оборвалась — попробуй ещё раз');
   if (wasHostInRun) announce('СВЯЗЬ ПОТЕРЯНА — ДОБИВАЙ САМ');
   if (wasGuestEnd) $('coopEndTxt').textContent += ' · напарник вышел в Схрон';
