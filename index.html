@@ -650,7 +650,7 @@ function radioOnce(key, msg, urgent) {
 }
 
 /* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
-const GAMEVER = 7;
+const GAMEVER = 8;
 const RELAY_URL = 'wss://pustosh-production.up.railway.app';
 function relayURL() {
   try { const o = localStorage.getItem('pustosh-relay'); if (o) return o; } catch (e) {}
@@ -819,14 +819,19 @@ const TNAME = ['runner', 'swarm', 'brute', 'spit', 'elite', 'boss'];
 const TRAD = [11, 7.5, 20, 12, 30, 52];
 function buildSnap() {
   const vx0 = cam.x - 60, vx1 = cam.x + W + 60, vy0 = cam.y - 60, vy1 = cam.y + H + 60;
+  const ax = NET.ally ? NET.ally.x : player.x, ay = NET.ally ? NET.ally.y : player.y;
   const en = [];
   for (const e of enemies) {
-    if (e.x < vx0 || e.x > vx1 || e.y < vy0 || e.y > vy1) continue;
-    if (en.length >= 130) break;
+    if (e.t !== 'boss') {
+      const inHost = !(e.x < vx0 || e.x > vx1 || e.y < vy0 || e.y > vy1);
+      if (!inHost && d2(e.x, e.y, ax, ay) > 620 * 620) continue;
+      if (en.length >= 130) continue;
+    }
     en.push([e.id | 0, TIDX[e.t] | 0, Math.round(e.x), Math.round(e.y),
       Math.max(1, Math.round(e.hp / e.mhp * 100)), e.hitT > 0 ? 1 : 0,
-      e.t === 'spit' && e.shT < 0.6 ? 1 : 0]);
+      e.t === 'spit' && e.shT < 0.6 ? 1 : 0, Math.round(e.mhp)]);
   }
+  NET.seq = (NET.seq || 0) + 1;
   const CIDX = { '#ffd77a': 0, '#e88a4a': 1, '#9fe3e8': 2, '#e8dcc4': 3 };
   const bu = [];
   for (const b of bullets) { if (bu.length >= 90) break; bu.push([Math.round(b.x), Math.round(b.y), CIDX[b.col] || 0, Math.round(b.vx / 10), Math.round(b.vy / 10)]); }
@@ -840,7 +845,7 @@ function buildSnap() {
     rv: Math.round(Math.min(1, (NET.revT || 0) / 3) * 100),
     tm: Math.round(time * 10) / 10, kl: kills, sc: Math.round(runScrap),
     lv: player.lvl, xp: Math.round(player.xp / player.xpNext * 100),
-    bs: be ? Math.round(be.hp / be.mhp * 100) : -1, pg: NET.ping, en, bu, gm,
+    q: NET.seq, bs: be ? Math.round(be.hp / be.mhp * 100) : -1, pg: NET.ping, en, bu, gm,
     po: pools.slice(0, 12).map(p => [Math.round(p.x), Math.round(p.y), Math.round(p.r), Math.round(clamp(p.t / p.max, 0, 1) * 9)]),
     mi: mines.slice(0, 10).map(m => [Math.round(m.x), Math.round(m.y), m.arm <= 0 ? 1 : 0]),
     tu: turrets.slice(0, 4).map(t => [Math.round(t.x), Math.round(t.y)]),
@@ -855,6 +860,8 @@ function buildSnap() {
       (NET.wp2.aura && NET.wp2.aura.on) ? Math.round(NET.wp2.aura.r) : 0] };
 }
 function netApplySnap(s) {
+  if (s.q && NET.lastQ && s.q <= NET.lastQ) return;
+  NET.lastQ = s.q || 0;
   time = s.tm;
   kills = s.kl; runScrap = s.sc;
   player.lvl = s.a[3] || 1; player.xp = s.a[2] || 0; player.xpNext = 100;
@@ -874,12 +881,18 @@ function netApplySnap(s) {
   NET.ping = s.pg;
   const seen = {};
   const list = [];
+  let dmgShown = 0;
   for (const row of s.en) {
     const id = row[0], ti = row[1];
     let ge = NET.gEn[id];
-    if (!ge) ge = { id, t: TNAME[ti], kind: ti === 5 ? 'gardener' : undefined, r: TRAD[ti],
-      x: row[2], y: row[3], wob: Math.random() * 6, hitT: 0, shT: 2, mode: 'idle', teleT: 0,
-      dashT: 5, atk: 0, dcd: 0, satk: 0, dmg: 0, col: '#8fb43a', col2: '#4c611e' };
+    if (!ge) {
+      ge = { id, t: TNAME[ti], kind: ti === 5 ? 'gardener' : undefined, r: TRAD[ti],
+        x: row[2], y: row[3], wob: Math.random() * 6, hitT: 0, shT: 2, mode: 'idle', teleT: 0,
+        dashT: 5, atk: 0, dcd: 0, satk: 0, dmg: 0, col: '#8fb43a', col2: '#4c611e' };
+    } else if (dmgShown < 10) {
+      const dm = (ge.hp - row[4]) / 100 * (row[7] || 100);
+      if (dm >= 1) { dmgText(row[2], row[3] - 10, String(Math.round(dm)), '#ffd77a'); dmgShown++; }
+    }
     ge.tx = row[2]; ge.ty = row[3];
     ge.hp = row[4]; ge.mhp = 100;
     if (row[5]) ge.hitT = 0.1;
@@ -975,6 +988,7 @@ function netOnMsg(raw) {
 function guestGo() {
   hide('coopEnd'); hide('over'); hide('victory');
   NET.gEn = {};
+  NET.lastQ = 0;
   NET.ally = { x: -70, y: 0, r: 13, hp: 100, maxHp: 100, flip: false, mov: false, wt: 0, hurtT: 0 };
   SAVE.sector = 0;
   hide('coop');
@@ -1151,6 +1165,7 @@ function updateGuest(dt) {
   for (let i = flashes.length - 1; i >= 0; i--) { flashes[i].t -= dt; if (flashes[i].t <= 0) flashes.splice(i, 1); }
   for (let i = rails.length - 1; i >= 0; i--) { rails[i].t -= dt; if (rails[i].t <= 0) rails.splice(i, 1); }
   for (let i = boltsFx.length - 1; i >= 0; i--) { boltsFx[i].t -= dt; if (boltsFx[i].t <= 0) boltsFx.splice(i, 1); }
+  for (let i = texts.length - 1; i >= 0; i--) { const tx2 = texts[i]; tx2.t -= dt; tx2.y -= 30 * dt; if (tx2.t <= 0) texts.splice(i, 1); }
   shake = Math.max(0, shake - dt * 40);
   // рация
   radioCool -= dt;
