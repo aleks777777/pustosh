@@ -684,8 +684,19 @@ function netMakePC() {
   const pc = new RTCPeerConnection({ iceServers: ice });
   NET.pc = pc;
   pc.onconnectionstatechange = () => {
-    if (['failed', 'disconnected', 'closed'].indexOf(pc.connectionState) < 0) return;
-    if (NET.p2p || !NET.ws) { netDrop(); return; }
+    const st2 = pc.connectionState;
+    if (st2 === 'connected') { clearTimeout(NET.dgT); return; }
+    if (st2 === 'disconnected') {
+      // штатное мигание WebRTC: даём 2.5с самому починиться
+      if (NET.p2p) {
+        clearTimeout(NET.dgT);
+        NET.dgT = setTimeout(() => { if (pc.connectionState !== 'connected') p2pFall(); }, 2500);
+      }
+      return;
+    }
+    if (st2 !== 'failed' && st2 !== 'closed') return;
+    if (NET.p2p) { p2pFall(); return; }
+    if (!NET.ws) { netDrop(); return; }
     // фоновая попытка p2p не удалась — тихо прибираем, остаёмся на релее
     try { pc.close(); } catch (e) {}
     if (NET.pc === pc) NET.pc = null;
@@ -711,7 +722,17 @@ function netWire(dc) {
     } else migrateP2P();
   };
   dc.onmessage = ev => netOnMsg(ev.data);
-  dc.onclose = () => { if (dc === NET.dcR || dc === NET.dcU) netDrop(); };
+  dc.onclose = () => { if (dc === NET.dcR || dc === NET.dcU) { if (NET.p2p) p2pFall(); else netDrop(); } };
+}
+/* прямой канал умер — тихо возвращаемся на релей, комната живёт */
+function p2pFall() {
+  if (!NET.p2p || !NET.role) return;
+  NET.p2p = false;
+  clearTimeout(NET.dgT);
+  try { if (NET.pc) NET.pc.close(); } catch (e) {}
+  NET.pc = null;
+  NET.rtcR = NET.rtcU = null;
+  wsConnect(NET.role === 'host' ? 'h' : 'g', NET.code);
 }
 /* пробились напрямую — переезжаем с релея на p2p, сервер отпускаем */
 function migrateP2P() {
@@ -803,6 +824,7 @@ function netDrop() {
   try { if (NET.ws) { NET.ws.onclose = null; NET.ws.close(); } } catch (e) {}
   NET.ws = null;
   const preGame = wasReadyPre === false && state !== 'play';
+  clearTimeout(NET.dgT);
   NET.role = null; NET.ready = false; NET.pc = NET.dcR = NET.dcU = NET.rtcR = NET.rtcU = null;
   NET.p2p = false;
   NET.ally = null; NET.gEn = {};
