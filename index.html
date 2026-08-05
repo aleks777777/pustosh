@@ -269,7 +269,7 @@ html,body{overscroll-behavior:none}
 <!-- КООП -->
 <div id="coop" class="ov hidden">
   <div class="panel">
-    <div class="eyebrow">вылазка вдвоём · сектор 07</div>
+    <div class="eyebrow">вылазка вдвоём · сектор выбирает создатель комнаты</div>
     <h2>ИГРА ВДВОЁМ</h2>
     <div id="coopStatus" class="metaline">выбери роль</div>
     <div id="coopPick">
@@ -280,6 +280,8 @@ html,body{overscroll-behavior:none}
       <div class="sech">КОД КОМНАТЫ</div>
       <div id="coopCode" style="font-size:34px;letter-spacing:.3em;color:var(--acid);margin:8px 0 10px"></div>
       <button id="coopShareB" class="ghost" style="margin-bottom:12px">⇪ ПОДЕЛИТЬСЯ ССЫЛКОЙ</button>
+      <div class="sech">СЕКТОР ВЫЛАЗКИ</div>
+      <div id="coopSecs" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px"></div>
       <button id="coopStartB" class="big" style="display:none">▶ В БОЙ</button>
     </div>
     <div id="coopJoin" style="display:none">
@@ -652,7 +654,7 @@ function radioOnce(key, msg, urgent) {
 }
 
 /* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
-const GAMEVER = 8;
+const GAMEVER = 9;
 const RELAY_URL = 'wss://pustosh-production.up.railway.app';
 function relayURL() {
   try { const o = localStorage.getItem('pustosh-relay'); if (o) return o; } catch (e) {}
@@ -813,15 +815,15 @@ function netDrop() {
   }
 }
 /* снапшот мира: хост → гость, 20 Гц */
-const TIDX = { runner: 0, swarm: 1, brute: 2, spit: 3, elite: 4, boss: 5 };
-const TNAME = ['runner', 'swarm', 'brute', 'spit', 'elite', 'boss'];
-const TRAD = [11, 7.5, 20, 12, 30, 52];
+const TIDX = { runner: 0, swarm: 1, brute: 2, spit: 3, elite: 4, boss: 5, node: 6 };
+const TNAME = ['runner', 'swarm', 'brute', 'spit', 'elite', 'boss', 'node'];
+const TRAD = [11, 7.5, 20, 12, 30, 52, 24];
 function buildSnap() {
   const vx0 = cam.x - 60, vx1 = cam.x + W + 60, vy0 = cam.y - 60, vy1 = cam.y + H + 60;
   const ax = NET.ally ? NET.ally.x : player.x, ay = NET.ally ? NET.ally.y : player.y;
   const en = [];
   for (const e of enemies) {
-    if (e.t !== 'boss') {
+    if (e.t !== 'boss' && e.t !== 'node') {
       const inHost = !(e.x < vx0 || e.x > vx1 || e.y < vy0 || e.y > vy1);
       if (!inHost && d2(e.x, e.y, ax, ay) > 620 * 620) continue;
       if (en.length >= 130) continue;
@@ -854,6 +856,11 @@ function buildSnap() {
       return [Math.round(m.x0 + (m.tx - m.x0) * mp), Math.round(m.y0 + (m.ty - m.y0) * mp - Math.sin(Math.PI * mp) * 46), Math.round((m.rot + mp * 9) * 10)];
     }),
     pk: pickups.slice(0, 8).map(p => [Math.round(p.x), Math.round(p.y), { heal: 0, log: 1, magnet: 2, nuke: 3 }[p.k] || 0]),
+    mz: MZ.on ? {
+      g: MZ.gateOpen ? 1 : 0, nl: MZ.nodesLeft,
+      dc: MZ.doors.reduce((a2, d, i) => { if (d.closed) a2[i >> 5 | 0] |= 1 << (i & 31); return a2; }, new Array(Math.ceil(MZ.doors.length / 32)).fill(0)),
+      dw: MZ.doors.reduce((a2, d, i) => { if (d.warn > 0) a2[i >> 5 | 0] |= 1 << (i & 31); return a2; }, new Array(Math.ceil(MZ.doors.length / 32)).fill(0))
+    } : 0,
     au: [Wp.aura.on ? Math.round(Wp.aura.r) : 0,
       (NET.wp2.aura && NET.wp2.aura.on) ? Math.round(NET.wp2.aura.r) : 0] };
 }
@@ -884,7 +891,7 @@ function netApplySnap(s) {
     const id = row[0], ti = row[1];
     let ge = NET.gEn[id];
     if (!ge) {
-      ge = { id, t: TNAME[ti], kind: ti === 5 ? 'gardener' : undefined, r: TRAD[ti],
+      ge = { id, t: TNAME[ti], kind: ti === 5 ? SEC().boss.kind : undefined, r: TRAD[ti],
         x: row[2], y: row[3], wob: Math.random() * 6, hitT: 0, shT: 2, mode: 'idle', teleT: 0,
         dashT: 5, atk: 0, dcd: 0, satk: 0, dmg: 0, col: '#8fb43a', col2: '#4c611e' };
     } else if (dmgShown < 10) {
@@ -922,6 +929,14 @@ function netApplySnap(s) {
   pickups.length = 0;
   if (s.pk) for (const p2 of s.pk) pickups.push({ x: p2[0], y: p2[1], k: ['heal', 'log', 'magnet', 'nuke'][p2[2]] || 'heal', ph: p2[0] * 0.01 });
   NET.allyAuraR = s.au ? s.au[0] : 0;
+  if (s.mz && MZ.on) {
+    MZ.gateOpen = !!s.mz.g;
+    MZ.nodesLeft = s.mz.nl;
+    for (let i = 0; i < MZ.doors.length; i++) {
+      MZ.doors[i].closed = !!(s.mz.dc[i >> 5 | 0] & (1 << (i & 31)));
+      MZ.doors[i].warn = (s.mz.dw[i >> 5 | 0] & (1 << (i & 31))) ? 1 : 0;
+    }
+  }
 }
 function netOnMsg(raw) {
   let m; try { m = JSON.parse(raw); } catch (e) { return; }
@@ -956,7 +971,7 @@ function netOnMsg(raw) {
     return;
   }
   if (m.t === 's') { if (state === 'play') netApplySnap(m); return; }
-  if (m.t === 'go') { if (!NET.verBad) guestGo(); return; }
+  if (m.t === 'go') { if (!NET.verBad) guestGo(m); return; }
   if (m.t === 'ev') {
     if (m.k === 'ann') announce(m.m);
     else if (m.k === 'rad') radioSay(m.m);
@@ -976,6 +991,8 @@ function netOnMsg(raw) {
       else if (m.f === 'bo') boltsFx.push(makeBolt(m.c));
       else if (m.f === 'bm') { burst(m.x, m.y, '#e88a4a', 16); shake = Math.min(14, shake + 4); SFX.mine(); }
       else if (m.f === 'th') { burst(m.x, m.y, '#e88a4a', 8); SFX.thud(); }
+      else if (m.f === 'sp') mzSpikes.push({ x: m.x, y: m.y, t: 0.95 });
+      else if (m.f === 'dg') { dug.add(m.x + ',' + m.y); burst((m.x + 0.5) * CS2, (m.y + 0.5) * CS2, '#6a5a4a', 8); }
     }
     else if (m.k === 'lvc') $('coopLvl').style.display = 'none';
     else if (m.k === 'lvo2') { $('coopLvl').textContent = 'НАПАРНИК ЧИТАЕТ ЗАПИСЬ…'; $('coopLvl').style.display = ''; }
@@ -983,7 +1000,9 @@ function netOnMsg(raw) {
     else if (m.k === 'win') guestEnd(true);
   }
 }
-function guestGo() {
+function guestGo(m) {
+  if (m && m.sec !== undefined) SAVE.sector = clamp(m.sec, 0, SECTORS.length - 1);
+  NET.mseed = (m && m.ms) || 0;
   hide('coopEnd'); hide('over'); hide('victory');
   NET.gEn = {};
   NET.lastQ = 0;
@@ -1129,6 +1148,17 @@ function updateGuest(dt) {
   }
   for (const b of bullets) { b.x += b.vx * dt; b.y += b.vy * dt; }
   for (const sw of saws) sw.rot = (sw.rot || 0) + dt * 14;
+  if (MZ.on) {
+    if (MZ.seen) MZ.seen[mzCellOf(player.x, player.y)] = 1;
+    for (let i = mzSpikes.length - 1; i >= 0; i--) {
+      mzSpikes[i].t -= dt;
+      if (mzSpikes[i].t <= 0) {
+        burst(mzSpikes[i].x, mzSpikes[i].y, '#d47ba8', 14);
+        SFX.thud();
+        mzSpikes.splice(i, 1);
+      }
+    }
+  }
   const sm2 = Math.min(1, dt * 12);
   for (const e of enemies) {
     if (e.tx !== undefined) { e.x += (e.tx - e.x) * sm2; e.y += (e.ty - e.y) * sm2; }
@@ -2340,6 +2370,10 @@ function mzCarve(T, cx, cy, axis) {
 }
 function mazeGen() {
   const N = MZ.N, P = MZ.P, mid = (N - 1) / 2;
+  const doSpawn = !(NET.ready && NET.role === 'guest');
+  let sd = (NET.ready && NET.mseed) ? NET.mseed : ((Math.random() * 2147483647) | 0);
+  NET.mseed = sd;
+  const R = () => { sd = (sd * 1103515245 + 12345) & 2147483647; return sd / 2147483648; };
   MZ.on = true;
   MZ.GW = N * P + 2;
   MZ.g0 = -Math.round(1 + mid * P + (P - 2) / 2);
@@ -2363,7 +2397,7 @@ function mazeGen() {
     if (cy > 0 && !vis[c - N]) nb.push([c - N, 'H', cx, cy - 1]);
     if (cy < N - 1 && !vis[c + N]) nb.push([c + N, 'H', cx, cy]);
     if (!nb.length) { st.pop(); continue; }
-    const pick = nb[(Math.random() * nb.length) | 0];
+    const pick = nb[(R() * nb.length) | 0];
     mzCarve(T, pick[2], pick[3], pick[1]);
     treeE.add(Math.min(c, pick[0]) + ':' + Math.max(c, pick[0]));
     deg[c]++; deg[pick[0]]++;
@@ -2406,13 +2440,13 @@ function mazeGen() {
     if (cx < N - 1 && !treeE.has(c + ':' + (c + 1)) && !touchesHeart(c, c + 1)) extra.push([c, c + 1, 'V', cx, cy]);
     if (cy < N - 1 && !treeE.has(c + ':' + (c + N)) && !touchesHeart(c, c + N)) extra.push([c, c + N, 'H', cx, cy]);
   }
-  for (let i = extra.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const t2 = extra[i]; extra[i] = extra[j]; extra[j] = t2; }
+  for (let i = extra.length - 1; i > 0; i--) { const j = (R() * (i + 1)) | 0; const t2 = extra[i]; extra[i] = extra[j]; extra[j] = t2; }
   const nDoors = Math.round(extra.length * 0.32);
   for (let i = 0; i < nDoors; i++) {
     const [a, b, ax, cx, cy] = extra[i];
     const tiles2 = mzCarve(T, cx, cy, ax);
     const di = MZ.doors.length;
-    MZ.doors.push({ a, b, tiles: tiles2, closed: false, t: rnd(5, 13), warn: 0,
+    MZ.doors.push({ a, b, tiles: tiles2, closed: false, t: 5 + R() * 8, warn: 0,
       cx: (tiles2.length ? ((tiles2[0] % MZ.GW) + MZ.g0) * CS2 : 0), cy2: 0 });
     tiles2.forEach(ti => { MZ.doorMap[ti] = di; });
   }
@@ -2451,7 +2485,7 @@ function mazeGen() {
     if (nodes.indexOf(c) === -1) nodes.push(c);
   }
   MZ.nodesLeft = nodes.length;
-  for (const c of nodes) {
+  if (doSpawn) for (const c of nodes) {
     const p2 = mzCellCenter(c);
     enemies.push({ t: 'node', x: p2.x, y: p2.y, r: 24, hp: 1400, mhp: 1400, spd: 0, dmg: 0,
       xp: 45, col: '#d47ba8', col2: '#5a2840', id: NET.eid++, atk: 0, dcd: 0, hitT: 0,
@@ -2532,16 +2566,24 @@ function mzWaypoint(x, y) {
   return mzCellCenter(nxt);
 }
 function mzSpawnPos() {
-  // клетка в 2-4 переходах от игрока по открытым коридорам
+  // клетка в 2-4 переходах от игрока (или неподалёку от напарника) по открытым коридорам
   const N = MZ.N, opts = [];
-  if (MZ.fdist) for (let c = 0; c < N * N; c++) if (MZ.fdist[c] >= 2 && MZ.fdist[c] <= 4) opts.push(c);
+  const A3 = (NET.ready && NET.role === 'host' && NET.ally && NET.ally.hp > 0) ? NET.ally : null;
+  if (A3 && Math.random() < 0.45) {
+    const ac = mzCellOf(A3.x, A3.y), acx = ac % N, acy = (ac / N) | 0;
+    for (let c = 0; c < N * N; c++) {
+      const md = Math.abs(c % N - acx) + Math.abs(((c / N) | 0) - acy);
+      if (md >= 2 && md <= 4) opts.push(c);
+    }
+  } else if (MZ.fdist) for (let c = 0; c < N * N; c++) if (MZ.fdist[c] >= 2 && MZ.fdist[c] <= 4) opts.push(c);
   const c = opts.length ? opts[(Math.random() * opts.length) | 0] : (Math.random() * N * N) | 0;
   const ctr = mzCellCenter(c);
   return { x: ctr.x + rnd(-70, 70), y: ctr.y + rnd(-70, 70) };
 }
 const mzSpikes = [];
 function mzSpike(tp) {
-  mzSpikes.push({ x: tp.x, y: tp.y, t: 0.95 });
+  mzSpikes.push({ x: Math.round(tp.x), y: Math.round(tp.y), t: 0.95 });
+  if (NET.role === 'host' && NET.ready) netSend(NET.dcU, { t: 'ev', k: 'fx', f: 'sp', x: Math.round(tp.x), y: Math.round(tp.y) });
 }
 function mazeTick(dt) {
   if (MZ.seen) MZ.seen[mzCellOf(player.x, player.y)] = 1;
@@ -2569,6 +2611,11 @@ function mazeTick(dt) {
       addRing(s2.x, s2.y, 52, '#d47ba8', 0.3, 4);
       SFX.thud();
       if (!player.down && d2(player.x, player.y, s2.x, s2.y) < 52 * 52) damagePlayer(SEC().boss.dmg * 0.6);
+      const A2 = NET.ally;
+      if (NET.role === 'host' && NET.ready && A2 && A2.hp > 0 && !A2.down && d2(A2.x, A2.y, s2.x, s2.y) < 52 * 52) {
+        A2.hp = Math.max(0, A2.hp - Math.max(1, SEC().boss.dmg * 0.6 - (A2.armor || 0)));
+        A2.hurtT = 0.4;
+      }
     }
   }
   // вход в сердце
@@ -2632,6 +2679,7 @@ function damageRock(gx, gy, typ, dmg, cx, cy, byPlayer) {
   if (dealt >= ROCK_HP[typ]) {
     rockDmg.delete(k);
     dug.add(k);
+    if (NET.role === 'host' && NET.ready) netSend(NET.dcR, { t: 'ev', k: 'fx', f: 'dg', x: gx, y: gy });
     const bx = gx * CS2 + CS2 / 2, by = gy * CS2 + CS2 / 2;
     burst(bx, by, typ === 2 ? '#e0b23a' : '#5d6b58', 12);
     SFX.rock();
@@ -2676,6 +2724,7 @@ function smashRocks(e) {
   for (let gx = g0x; gx <= g1x; gx++) for (let gy = g0y; gy <= g1y; gy++) {
     if (!rockAt(gx, gy)) continue;
     dug.add(rkey(gx, gy));
+    if (NET.role === 'host' && NET.ready) netSend(NET.dcR, { t: 'ev', k: 'fx', f: 'dg', x: gx, y: gy });
     rockDmg.delete(rkey(gx, gy));
     burst(gx * CS2 + CS2 / 2, gy * CS2 + CS2 / 2, '#5d6b58', 8);
     if (Math.random() < 0.25) SFX.rock();
@@ -4471,6 +4520,7 @@ function renderMenu() {
   $('introHint').style.display = first ? '' : 'none';
 }
 function renderBrief() {
+  if (SAVE.sector >= SAVE.unlocked) SAVE.sector = 0;
   $('briefScrap').textContent = '⚙ ' + SAVE.scrap + '  ·  👥 ' + (9 + SAVE.pop) + '  ·  рекорд ' + fmt(SAVE.best);
   const sb = $('sectors'); sb.innerHTML = '';
   SECTORS.forEach((s, i) => {
@@ -4810,6 +4860,8 @@ $('coopB').onclick = () => {
 $('coopBackB').onclick = () => { netDrop(); hide('coop'); show('start'); renderMenu(); };
 $('coopHostB').onclick = async () => {
   NET.role = 'host';
+  NET.secPick = clamp(SAVE.sector, 0, SAVE.unlocked - 1);
+  renderCoopSecs();
   NET.code = roomCode();
   $('coopPick').style.display = 'none';
   $('coopHost').style.display = '';
@@ -4840,11 +4892,25 @@ $('coopShareB').onclick = () => {
     setTimeout(() => { $('coopShareB').textContent = '⇪ ПОДЕЛИТЬСЯ ССЫЛКОЙ'; }, 1800);
   }
 };
+function renderCoopSecs() {
+  const box = $('coopSecs');
+  box.innerHTML = '';
+  SECTORS.forEach((s, i) => {
+    if (i >= SAVE.unlocked) return;
+    const b = document.createElement('button');
+    b.className = 'ghost';
+    b.textContent = s.n.slice(-2) + ' · ' + s.sub;
+    b.style.cssText = 'font-size:10px;padding:8px 10px' + (i === NET.secPick ? ';border-color:var(--acid);color:var(--acid)' : '');
+    b.onclick = () => { NET.secPick = i; renderCoopSecs(); };
+    box.appendChild(b);
+  });
+}
 function coopLaunch() {
-  SAVE.sector = 0;
+  SAVE.sector = clamp(NET.secPick || 0, 0, SAVE.unlocked - 1);
+  NET.mseed = (Math.random() * 2147483647) | 0;
   NET.ally = Object.assign(NET.ally || {}, { x: 70, y: 0, r: 13, hp: 100, maxHp: 100,
     flip: false, mov: false, wt: 0, hurtT: 0, down: false });
-  netSend(NET.dcR, { t: 'go' });
+  netSend(NET.dcR, { t: 'go', sec: SAVE.sector, ms: NET.mseed });
   hide('coop');
   startRun();
   player.x = -70; player.y = 0;
@@ -4919,6 +4985,15 @@ DEV.killNodes = () => { for (let i = enemies.length - 1; i >= 0; i--) if (enemie
 DEV.tp = (x, y) => { player.x = x; player.y = y; };
 DEV.bossKind = () => { const b = enemies.find(e => e.t === 'boss'); return b ? b.kind : 'нет'; };
 DEV.spikes = () => mzSpikes.length;
+DEV.setSeed = v => { NET.mseed = v; };
+DEV.setRole = r => { NET.role = r; NET.ready = true; };
+DEV.mzGen = () => {
+  for (let i = enemies.length - 1; i >= 0; i--) if (enemies[i].t === 'node') enemies.splice(i, 1);
+  mazeGen();
+  let sm = 0;
+  for (let i = 0; i < MZ.tiles.length; i++) sm = (sm * 31 + MZ.tiles[i]) >>> 0;
+  return { s: sm, d: MZ.doors.length, h: MZ.heart, n: enemies.filter(e => e.t === 'node').length };
+};
 DEV.mzEdge = (a, b) => {
   const N = MZ.N, lo = Math.min(a, b);
   const ax = Math.abs(a - b) === 1 ? 'V' : 'H';
