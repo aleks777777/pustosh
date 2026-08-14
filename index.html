@@ -5013,6 +5013,28 @@ function dailyExit() {
   DAILY.on = false;
   SAVE.sector = DAILY.prevSector;
 }
+function dailyQueue() {
+  try { return JSON.parse(localStorage.getItem('pustosh-pending') || '[]'); } catch (e) { return []; }
+}
+function dailyQueueSet(q) {
+  try { localStorage.setItem('pustosh-pending', JSON.stringify(q.slice(-10))); } catch (e) {}
+}
+async function dailyFlush() {
+  const id = pid();
+  const q = dailyQueue();
+  if (!id || !q.length || typeof fetch === 'undefined') return;
+  const rest = [];
+  for (const it of q) {
+    try {
+      const r = await (await fetch(API + '/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ token: id.token }, it)) })).json();
+      if (!r.err && r.rank) radioSay('Результат испытания дошёл до Схрона: место ' + r.rank + ' из ' + r.total + '.');
+      // err «день закрыт» — тоже выбрасываем: поезд ушёл
+    } catch (e) { rest.push(it); }
+  }
+  dailyQueueSet(rest);
+}
+try { if (typeof addEventListener !== 'undefined') addEventListener('online', () => { dailyFlush(); }); } catch (e) {}
 async function dailySubmit(win) {
   if (!DAILY.on || DAILY.sent) return;
   DAILY.sent = true;
@@ -5031,7 +5053,13 @@ async function dailySubmit(win) {
       put('☀ ИСПЫТАНИЕ: ' + score + ' ⚙ — место ' + r.rank + ' из ' + r.total +
         (r.secBest > score ? ' · твой лучший сегодня: ' + r.secBest : ''));
     }
-  } catch (e) { put('☀ испытание: эфир молчит, результат не передан'); }
+  } catch (e) {
+    const q = dailyQueue();
+    q.push({ day: DAILY.day, score, time: Math.round(time), kills, win: win ? 1 : 0, sector: DAILY.sector });
+    dailyQueueSet(q);
+    dailyBestSet(DAILY.sector, score);
+    put('☀ ' + score + ' ⚙ · сети нет — результат записан и уйдёт в Схрон при первой связи');
+  }
 }
 $('coopB').onclick = () => {
   dailyExit();
@@ -5218,9 +5246,14 @@ DEV.netApply = s => {
 window.__dev = DEV;
 
 resetPlayer(); resetWeapons();
+try {
+  if (typeof navigator !== 'undefined' && navigator.serviceWorker && location.protocol === 'https:')
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+} catch (e) {}
 loadSave().then(() => {
   checkAch();
   renderMenu();
+  dailyFlush();
   const jm = ((typeof location !== 'undefined' && location.hash) || '').match(/join=([A-Za-z0-9]{3,6})/);
   if (jm) {
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
