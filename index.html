@@ -243,6 +243,9 @@ html,body{overscroll-behavior:none}
     <div id="chars"></div>
     <div class="sech">ПРИПАСЫ — на одну вылазку</div>
     <div id="supplies" class="supline"></div>
+    <div class="sech" style="margin-top:14px">ГЛУБИНА ЗАРАЖЕНИЯ — вызов ради добычи</div>
+    <div id="deepRow" class="supline"></div>
+    <div id="deepInfo" class="metaline"></div>
     <button id="deployB" class="big">▶ В БОЙ</button>
     <div class="btnrow"><button id="briefBackB" class="ghost">НАЗАД</button></div>
   </div>
@@ -672,6 +675,18 @@ function radioOnce(key, msg, urgent) {
 
 /* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
 const GAMEVER = 9;
+const DEEP = [
+  { id: 'dense', n: 'ПЛОТНАЯ ОРДА', d: 'твари прут на треть чаще', w: 1 },
+  { id: 'twin',  n: 'ПАРНЫЕ ЗОЛОТЫЕ', d: 'элиты приходят вдвоём', w: 1 },
+  { id: 'wrath', n: 'ЗЛЫЕ ТВАРИ', d: 'урон врагов +30%', w: 1 },
+  { id: 'tough', n: 'ТОЛСТОКОЖИЕ', d: 'здоровье врагов +35%', w: 1 },
+  { id: 'dark',  n: 'ТЕМНОТА', d: 'видно только вокруг резчика', w: 1 },
+  { id: 'hunger', n: 'ГОЛОДНАЯ ЗЕМЛЯ', d: 'кристаллы тают за 6 секунд', w: 2 },
+  { id: 'rush',  n: 'СПЕШКА', d: 'босс на 8-й минуте · мембраны вдвое злее', w: 2 }
+];
+const deepOn = () => (SAVE.deep || []).length > 0 && !NET.ready && !DAILY.on;
+const deepHas = id => deepOn() && SAVE.deep.indexOf(id) >= 0;
+const deepVal = () => (SAVE.deep || []).reduce((a, id) => a + ((DEEP.find(x => x.id === id) || {}).w || 0), 0);
 const DAILY = { on: false, day: 0, seed: 0, sector: 0, charId: 'rez', prevSector: 0, prevSel: '', sent: false };
 function dayNum() {
   const d = new Date();
@@ -2662,7 +2677,7 @@ function mazeTick(dt) {
   if (MZ.seen) MZ.seen[mzCellOf(player.x, player.y)] = 1;
   MZ.flowT -= dt;
   if (MZ.flowT <= 0) { MZ.flowT = 0.6; mzFlow(); }
-  const speedUp = 1 + (5 - MZ.nodesLeft) * 0.14; // корни злее с каждым узлом
+  const speedUp = (1 + (5 - MZ.nodesLeft) * 0.14) * (deepHas('rush') ? 2 : 1); // корни злее с каждым узлом и на глубине
   for (const d of MZ.doors) {
     if (d.warn > 0) {
       d.warn -= dt;
@@ -2816,7 +2831,7 @@ const ETYPES = {
 function spawn(type, px, py) {
   const t = ETYPES[type], S = SEC();
   const a = rnd(TAU), dst = Math.max(W, H) * 0.55 + 90;
-  const hpS = type === 'boss' ? 1 : (1 + time / 75) * (type === 'elite' ? 1 + time / 140 : 1) * S.hpM;
+  const hpS = (type === 'boss' ? 1 : (1 + time / 75) * (type === 'elite' ? 1 + time / 140 : 1) * S.hpM) * (deepHas('tough') && type !== 'boss' ? 1.35 : 1);
   const hp = t.hp * hpS;
   const pal = S.pal[type];
   let sx = px !== undefined ? px : player.x + Math.cos(a) * dst;
@@ -2861,6 +2876,7 @@ function spawnBoss(px, py) {
 function spawner(dt) {
   spawnT -= dt;
   let interval = Math.max(0.13, 1.2 - time * 0.0036);
+  if (deepHas('dense')) interval *= 0.72;
   if (bossActive) interval *= 2.6;
   if (spawnT <= 0 && enemies.length < 330) {
     spawnT = interval;
@@ -2875,7 +2891,8 @@ function spawner(dt) {
     if (eliteTimer <= 0) {
       eliteTimer = 42;
       spawn('elite');
-      announce('⚠ ЗОЛОТОЙ МУТАНТ');
+      if (deepHas('twin')) spawn('elite');
+      announce(deepHas('twin') ? '⚠ ДВА ЗОЛОТЫХ МУТАНТА' : '⚠ ЗОЛОТОЙ МУТАНТ');
       if (Math.random() < 0.5) radioSay(rp(RADIO.elite));
       SFX.elite();
     }
@@ -2928,7 +2945,7 @@ function dropPickup(x, y) {
   const k = ['heal', 'magnet', 'nuke'][irnd(0, 2)];
   pickups.push({ x, y, k, ph: rnd(TAU) });
 }
-function addScrap(n) { runScrap += n * scrapMult; SFX.scrap(); }
+function addScrap(n) { runScrap += n * scrapMult * (deepOn() ? 1 + 0.15 * deepVal() : 1); SFX.scrap(); }
 
 /* ================= эффекты ================= */
 function burst(x, y, col, n) {
@@ -2965,6 +2982,7 @@ function hitEnemy(e, base, colNorm) {
 /* ================= урон игроку / исходы ================= */
 function damagePlayer(d) {
   if (player.down) return;
+  if (deepHas('wrath')) d *= 1.3;
   if (state !== 'play' || DEV.god) return;
   d = Math.max(1, d - player.armor);
   player.hp -= d;
@@ -3034,6 +3052,7 @@ function victory() {
   state = 'victory';
   addScrap(200);
   SAVE.wins++;
+  if (deepOn() && deepVal() > (SAVE.deepBest || 0)) { SAVE.deepBest = deepVal(); announce('✦ РЕКОРД ГЛУБИНЫ: ' + SAVE.deepBest); }
   if (SAVE.sector === 1) SAVE.wins2++;
   if (SAVE.sector === 2) {
     SAVE.wins3 = (SAVE.wins3 || 0) + 1;
@@ -3334,7 +3353,7 @@ function update(dt) {
     lastMinute = min;
     addScrap(10);
     if (min < 10 && SEC().ch[min]) announce(SEC().ch[min]);
-    if (min === 10 && !bossActive && !SEC().maze) spawnBoss();
+    if (min === (deepHas('rush') ? 8 : 10) && !bossActive && !SEC().maze) spawnBoss();
     if (min >= 2 && MUS.inten > 0 && MUS.inten < 2) MUS.setIntensity(2);
     if (RADIO['m' + min]) radioOnce('m' + min, rp(RADIO['m' + min]));
     killsThisMin = 0;
@@ -3673,6 +3692,10 @@ function update(dt) {
   const coopA = (NET.ready && NET.role === 'host' && NET.ally && NET.ally.hp > 0) ? NET.ally : null;
   for (let i = gems.length - 1; i >= 0; i--) {
     const g = gems[i];
+    if (deepHas('hunger')) {
+      g.ttl = (g.ttl === undefined ? 6 : g.ttl) - dt;
+      if (g.ttl <= 0) { gems.splice(i, 1); continue; }
+    }
     let tgt = player.down && coopA ? coopA : player;
     let dx = tgt.x - g.x, dy = tgt.y - g.y;
     let d = Math.hypot(dx, dy) || 1;
@@ -4314,6 +4337,15 @@ function draw() {
     }
   }
 
+  if (!MZ.on && deepHas('dark')) {
+    const gD = ctx.createRadialGradient(player.x, player.y, 175, player.x, player.y, 540);
+    gD.addColorStop(0, 'rgba(5,6,9,0)');
+    gD.addColorStop(0.6, 'rgba(5,6,9,0.55)');
+    gD.addColorStop(1, 'rgba(4,5,8,0.93)');
+    ctx.fillStyle = gD;
+    ctx.fillRect(cam.x - 80, cam.y - 80, W + 160, H + 160);
+  }
+
   // подъём павшего: крест и зелёное кольцо прогресса
   if (NET.ready) {
     const dwn2 = player.down ? player : (NET.ally && NET.ally.down ? NET.ally : null);
@@ -4594,8 +4626,32 @@ function renderMenu() {
   $('introTag').style.display = first ? '' : 'none';
   $('introHint').style.display = first ? '' : 'none';
 }
+function renderDeep() {
+  const row = $('deepRow');
+  row.innerHTML = '';
+  if (!SAVE.deep) SAVE.deep = [];
+  DEEP.forEach(m => {
+    const on = SAVE.deep.indexOf(m.id) >= 0;
+    const b = document.createElement('button');
+    b.className = 'ghost';
+    b.style.cssText = 'font-size:9px;padding:7px 9px' + (on ? ';border-color:var(--warn,#e0b23a);color:var(--warn,#e0b23a)' : '');
+    b.textContent = (on ? '☒ ' : '☐ ') + m.n + ' +' + m.w;
+    b.title = m.d;
+    b.onclick = () => {
+      const i = SAVE.deep.indexOf(m.id);
+      if (i >= 0) SAVE.deep.splice(i, 1); else SAVE.deep.push(m.id);
+      renderDeep();
+    };
+    row.appendChild(b);
+  });
+  const v = deepVal();
+  $('deepInfo').textContent = v > 0
+    ? 'глубина ' + v + ' · добыча +' + Math.round(v * 15) + '%' + (SAVE.deepBest ? ' · рекорд победы: ' + SAVE.deepBest : '')
+    : 'без глубины · включай испытания — каждая даёт +15% к добыче' + (SAVE.deepBest ? ' · рекорд победы: ' + SAVE.deepBest : '');
+}
 function renderBrief() {
   if (SAVE.sector >= SAVE.unlocked) SAVE.sector = 0;
+  renderDeep();
   $('briefScrap').textContent = '⚙ ' + SAVE.scrap + '  ·  👥 ' + (9 + SAVE.pop) + '  ·  рекорд ' + fmt(SAVE.best);
   const sb = $('sectors'); sb.innerHTML = '';
   SECTORS.forEach((s, i) => {
@@ -5200,6 +5256,9 @@ DEV.tp = (x, y) => { player.x = x; player.y = y; };
 DEV.bossKind = () => { const b = enemies.find(e => e.t === 'boss'); return b ? b.kind : 'нет'; };
 DEV.spikes = () => mzSpikes.length;
 DEV.setSeed = v => { NET.mseed = v; };
+DEV.deep = a => { SAVE.deep = a; };
+DEV.dmg = d => { const b = player.hp; damagePlayer(d); return Math.round((b - player.hp) * 10) / 10; };
+DEV.scr = n => { const b = runScrap; addScrap(n); return Math.round((runScrap - b) * 100) / 100; };
 DEV.setRole = r => { NET.role = r; NET.ready = true; };
 DEV.mzGen = () => {
   for (let i = enemies.length - 1; i >= 0; i--) if (enemies[i].t === 'node') enemies.splice(i, 1);
