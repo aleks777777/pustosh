@@ -285,6 +285,20 @@ html,body{overscroll-behavior:none}
     <button id="dailyBackB" class="ghost" style="margin-top:14px">НАЗАД</button>
   </div>
 </div>
+<div id="greedAsk" class="ov hidden">
+  <div class="panel">
+    <div class="eyebrow">эвакуация готова · но пустошь ещё дышит добычей</div>
+    <h2>УЙТИ ИЛИ ОСТАТЬСЯ?</h2>
+    <div id="greedTxt" class="metaline" style="margin-bottom:14px"></div>
+    <button id="greedLeaveB" class="big">УЙТИ С ДОБЫЧЕЙ</button>
+    <button id="greedStayB" class="big" style="margin-top:10px;border-color:var(--warn,#e0b23a);color:var(--warn,#e0b23a)">ОСТАТЬСЯ · +25% ДОБЫЧИ КАЖДУЮ МИНУТУ</button>
+    <div class="metaline" style="margin-top:10px;opacity:.7">эвакуация будет открываться на 10 секунд раз в минуту · смерть заберёт половину всей добычи</div>
+  </div>
+</div>
+<div id="greedHud" style="display:none;position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:40;text-align:center;pointer-events:auto">
+  <div id="greedTop" class="metaline" style="color:var(--warn,#e0b23a)"></div>
+  <button id="evacB" class="big" style="display:none;padding:10px 18px;font-size:12px">⚑ ЭВАКУАЦИЯ</button>
+</div>
 <div id="coop" class="ov hidden">
   <div class="panel">
     <div class="eyebrow">вылазка вдвоём · сектор выбирает создатель комнаты</div>
@@ -687,6 +701,9 @@ const DEEP = [
 const deepOn = () => (SAVE.deep || []).length > 0 && !NET.ready && !DAILY.on;
 const deepHas = id => deepOn() && SAVE.deep.indexOf(id) >= 0;
 const deepVal = () => (SAVE.deep || []).reduce((a, id) => a + ((DEEP.find(x => x.id === id) || {}).w || 0), 0);
+const GREED = { on: false, t: 0 };
+const greedM = () => 1 + 0.25 * (GREED.t / 60);
+const GREED_CYC = 60, GREED_WIN = 10;
 const DAILY = { on: false, day: 0, seed: 0, sector: 0, charId: 'rez', prevSector: 0, prevSel: '', sent: false };
 function dayNum() {
   const d = new Date();
@@ -2920,7 +2937,17 @@ function killEnemy(e, i) {
     if (decals.length > 120) decals.shift();
     decals.push({ x: e.x, y: e.y, r: e.r, col: e.col, t: 9, seed: irnd(1, 999) });
   }
-  if (e.t === 'boss') { victory(); return; }
+  if (e.t === 'boss') {
+    if (!NET.ready && !SEC().maze) {
+      state = 'greedask';
+      $('greedTxt').textContent = 'в кузове ' + Math.round(runScrap) + ' ⚙ · пустошь продолжит звереть';
+      show('greedAsk');
+      SFX.evolve();
+      return;
+    }
+    victory();
+    return;
+  }
   if (e.t === 'elite') {
     SAVE.stats.elites++;
     addScrap(8);
@@ -2945,7 +2972,7 @@ function dropPickup(x, y) {
   const k = ['heal', 'magnet', 'nuke'][irnd(0, 2)];
   pickups.push({ x, y, k, ph: rnd(TAU) });
 }
-function addScrap(n) { runScrap += n * scrapMult * (deepOn() ? 1 + 0.15 * deepVal() : 1); SFX.scrap(); }
+function addScrap(n) { runScrap += n * scrapMult * (deepOn() ? 1 + 0.15 * deepVal() : 1) * (GREED.on ? greedM() : 1); SFX.scrap(); }
 
 /* ================= эффекты ================= */
 function burst(x, y, col, n) {
@@ -3031,6 +3058,10 @@ function endRunCommon() {
   return gained;
 }
 function gameOver() {
+  if (GREED.on) {
+    runScrap = Math.round(runScrap / 2);
+    announce('ЖАДНОСТЬ НАКАЗАНА — ПОЛОВИНА ДОБЫЧИ ОСТАЛАСЬ В ПУСТОШИ');
+  }
   if (DAILY.on) { dailySubmit(false); DAILY.sent = true; }
   state = 'over';
   if (player.hp <= 0) gibSprite('player', 0, player.x, player.y, player.r, true);
@@ -3048,6 +3079,10 @@ function gameOver() {
   SFX.die();
 }
 function victory() {
+  const gh = GREED.on;
+  GREED.on = false;
+  $('greedHud').style.display = 'none';
+  if (gh) announce('✦ ВЫРВАЛСЯ С ДОБЫЧЕЙ');
   if (DAILY.on) { DAILY.sent = false; dailySubmit(true); }
   state = 'victory';
   addScrap(200);
@@ -3346,7 +3381,16 @@ function weapons(dt) {
 /* ================= обновление ================= */
 function update(dt) {
   if (NET.role === 'guest' && NET.ready) { updateGuest(dt); return; }
-  if (state === 'wait2') return;
+  if (state === 'wait2' || state === 'greedask') return;
+  if (GREED.on) {
+    GREED.t += dt;
+    const ph = GREED.t % GREED_CYC;
+    const open = ph >= GREED_CYC - GREED_WIN;
+    $('greedTop').textContent = 'ЖАДНОСТЬ ×' + greedM().toFixed(2) + (open
+      ? ' · ⚑ ОКНО ОТКРЫТО: ' + Math.ceil(GREED_CYC - ph) + 'с'
+      : ' · эвакуация через ' + Math.ceil(GREED_CYC - GREED_WIN - ph) + 'с');
+    $('evacB').style.display = open ? '' : 'none';
+  }
   time += dt;
   const min = Math.floor(time / 60);
   if (min > lastMinute) {
@@ -4934,6 +4978,10 @@ function startRun() {
   mzSpikes.length = 0;
   if (SEC().maze) mazeGen();
   state = 'play';
+  GREED.on = false;
+  GREED.t = 0;
+  $('greedHud').style.display = 'none';
+  $('evacB').style.display = 'none';
   $('dailyRank1').textContent = '';
   $('dailyRank2').textContent = '';
   DAILY.sent = false;
@@ -5117,6 +5165,20 @@ async function dailySubmit(win) {
     put('☀ ' + score + ' ⚙ · сети нет — результат записан и уйдёт в Схрон при первой связи');
   }
 }
+$('greedLeaveB').onclick = () => { hide('greedAsk'); state = 'play'; victory(); };
+$('greedStayB').onclick = () => {
+  hide('greedAsk');
+  state = 'play';
+  GREED.on = true;
+  GREED.t = 0;
+  $('greedHud').style.display = '';
+  announce('✦ ЖАДНОСТЬ ПРИНЯТА — ДЕРЖИСЬ');
+  radioSay('Остался? Смелый. Или жадный. Вытащи оттуда всё — и вернись живым.', true);
+};
+$('evacB').onclick = () => {
+  if (!GREED.on || state !== 'play') return;
+  victory();
+};
 $('coopB').onclick = () => {
   dailyExit();
   audioInit();
@@ -5257,6 +5319,11 @@ DEV.bossKind = () => { const b = enemies.find(e => e.t === 'boss'); return b ? b
 DEV.spikes = () => mzSpikes.length;
 DEV.setSeed = v => { NET.mseed = v; };
 DEV.deep = a => { SAVE.deep = a; };
+DEV.state = () => state;
+DEV.greed = () => ({ on: GREED.on, t: GREED.t, m: Math.round(greedM() * 100) / 100 });
+DEV.runScrap = () => Math.round(runScrap);
+DEV.bossNow = () => spawnBoss();
+DEV.killBoss = () => { const i = enemies.findIndex(e => e.t === 'boss'); if (i >= 0) { enemies[i].hp = 0; killEnemy(enemies[i], i); } };
 DEV.dmg = d => { const b = player.hp; damagePlayer(d); return Math.round((b - player.hp) * 10) / 10; };
 DEV.scr = n => { const b = runScrap; addScrap(n); return Math.round((runScrap - b) * 100) / 100; };
 DEV.setRole = r => { NET.role = r; NET.ready = true; };
