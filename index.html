@@ -276,7 +276,7 @@ html,body{overscroll-behavior:none}
       <h2>ИСПЫТАНИЕ ДНЯ</h2>
       <div id="dailyInfo" class="metaline" style="margin-bottom:10px"></div>
       <div id="dailyName" style="margin-bottom:12px"></div>
-      <button id="dailyGoB" class="big" style="display:none">▶ ПРИНЯТЬ ИСПЫТАНИЕ</button>
+      <div id="dailySecs" style="margin-bottom:4px"></div>
       <div class="sech">ТОП ДНЯ</div>
       <div id="dailyBoard" class="metaline" style="min-height:60px">…</div>
     <button id="dailyBackB" class="ghost" style="margin-top:14px">НАЗАД</button>
@@ -679,9 +679,22 @@ function dayNum() {
 }
 function dailyCalc() {
   DAILY.day = dayNum();
-  DAILY.seed = ((DAILY.day * 2654435761) ^ 0x9e3779b9) & 2147483647;
-  DAILY.sector = DAILY.day % 3;
-  DAILY.charId = ['rez', 'him', 'smo'][(DAILY.day >> 2) % 3];
+  DAILY.charId = ['rez', 'him', 'smo'][DAILY.day % 3];
+}
+function dailySeed(sec) {
+  return ((DAILY.day * 2654435761) ^ (sec * 48271 + 0x9e3779b9)) & 2147483647;
+}
+function dailyBest() {
+  try {
+    const d = JSON.parse(localStorage.getItem('pustosh-daily') || 'null');
+    if (d && d.day === DAILY.day) return d.best;
+  } catch (e) {}
+  return [0, 0, 0];
+}
+function dailyBestSet(sec, v) {
+  const b = dailyBest();
+  b[sec] = Math.max(b[sec], v);
+  try { localStorage.setItem('pustosh-daily', JSON.stringify({ day: DAILY.day, best: b })); } catch (e) {}
 }
 function pid() {
   try { return JSON.parse(localStorage.getItem('pustosh-id') || 'null'); } catch (e) { return null; }
@@ -4911,20 +4924,44 @@ $('deployB').onclick = () => startRun();
 $('briefBackB').onclick = () => { state = 'menu'; renderMenu(); hide('brief'); show('start'); };
 $('againB').onclick = () => {
   if (NET.ready && NET.role === 'host') { coopLaunch(); return; }
-  if (DAILY.on) { NET.mseed = DAILY.seed; const k2 = SAVE.sel; SAVE.sel = DAILY.charId; startRun(); SAVE.sel = k2; return; }
+  if (DAILY.on) { NET.mseed = dailySeed(DAILY.sector); const k2 = SAVE.sel; SAVE.sel = DAILY.charId; startRun(); SAVE.sel = k2; return; }
   startRun();
 };
 function fmtT(t) { return Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0'); }
+function renderDailySecs() {
+  const box = $('dailySecs');
+  box.innerHTML = '';
+  const best = dailyBest();
+  const can = !!pid();
+  SECTORS.forEach((s2, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;margin:7px 0';
+    row.innerHTML = '<span style="text-align:left">' + s2.n + ' · ' + s2.sub +
+      '<br><span style="opacity:.65;font-size:10px">лучший сегодня: ' + (best[i] || '—') + (best[i] ? ' ⚙' : '') + '</span></span>';
+    const b = document.createElement('button');
+    b.className = 'ghost';
+    b.textContent = '▶ В БОЙ';
+    b.disabled = !can;
+    b.onclick = () => dailyGo(i);
+    row.appendChild(b);
+    box.appendChild(row);
+  });
+  const sum = best[0] + best[1] + best[2];
+  if (sum > 0) {
+    const t = document.createElement('div');
+    t.className = 'metaline';
+    t.textContent = 'твоя сумма дня: ' + sum + ' ⚙';
+    box.appendChild(t);
+  }
+}
 function renderDailyName() {
   const box = $('dailyName');
   const id = pid();
   if (id && id.name) {
     box.innerHTML = 'позывной: <b style="color:var(--acid)">' + id.name + '</b> <button id="dailyRenB" class="ghost" style="font-size:9px;padding:5px 8px">сменить</button>';
-    $('dailyRenB').onclick = () => { try { localStorage.removeItem('pustosh-id'); } catch (e) {} renderDailyName(); };
-    $('dailyGoB').style.display = SAVE.unlocked > DAILY.sector ? '' : 'none';
+    $('dailyRenB').onclick = () => { try { localStorage.removeItem('pustosh-id'); } catch (e) {} renderDailyName(); renderDailySecs(); };
   } else {
     box.innerHTML = '<input id="dailyNameIn" class="netin" maxlength="16" placeholder="ТВОЙ ПОЗЫВНОЙ" style="width:180px"> <button id="dailySaveB" class="ghost">В ЭФИР</button>';
-    $('dailyGoB').style.display = 'none';
     $('dailySaveB').onclick = async () => {
       const nm = $('dailyNameIn').value.trim();
       if (nm.length < 2) return;
@@ -4932,7 +4969,7 @@ function renderDailyName() {
         const r = await fetch(API + '/api/hello', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: nm, token: (pid() || {}).token }) });
         const d = await r.json();
-        if (d.token) { localStorage.setItem('pustosh-id', JSON.stringify(d)); renderDailyName(); }
+        if (d.token) { localStorage.setItem('pustosh-id', JSON.stringify(d)); renderDailyName(); renderDailySecs(); }
       } catch (e) { $('dailyBoard').textContent = 'нет связи со Схроном — проверь интернет'; }
     };
   }
@@ -4946,36 +4983,37 @@ async function renderDailyBoard() {
     $('dailyBoard').innerHTML = d.rows.map((r, i) =>
       '<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0' +
       (r.name === me ? ';color:var(--acid)' : '') + '">' +
-      '<span>' + (i + 1) + '. ' + r.name + (r.win ? ' ✦' : '') + '</span>' +
-      '<span>' + r.score + ' ⚙ · ' + fmtT(r.time) + '</span></div>').join('') +
-      '<div style="margin-top:6px;opacity:.6">всего в топе: ' + d.total + '</div>';
+      '<span>' + (i + 1) + '. ' + r.name + (r.wins ? ' ' + '✦'.repeat(r.wins) : '') + '</span>' +
+      '<span>' + r.score + ' ⚙ <span style="opacity:.55;font-size:10px">' + r.parts.join('/') + '</span></span></div>').join('') +
+      '<div style="margin-top:6px;opacity:.6">всего в топе: ' + d.total + ' · счёт — сумма трёх секторов</div>';
   } catch (e) { $('dailyBoard').textContent = 'эфир молчит — проверь интернет'; }
 }
 $('dailyB').onclick = () => {
   if (NET.ready) return;
   dailyCalc();
-  const S2 = SECTORS[DAILY.sector], C2 = CHARS.find(c => c.id === DAILY.charId) || CHARS[0];
-  $('dailyInfo').innerHTML = 'сегодня: <b>' + S2.n + ' · ' + S2.sub + '</b> · боец дня: <b>' + C2.n + '</b>' +
-    (SAVE.unlocked > DAILY.sector ? '' : '<br><span style="color:var(--warn,#e0b23a)">сектор ещё заперт — открой его в обычных вылазках</span>') +
-    '<br>прокачка Схрона выключена · боец дня выдан всем · счёт = скрап, ×2 за босса';
+  const C2 = CHARS.find(c => c.id === DAILY.charId) || CHARS[0];
+  $('dailyInfo').innerHTML = 'боец дня для всех: <b>' + C2.n + '</b> · прокачка Схрона выключена' +
+    '<br>пройди <b>все три сектора</b> — счёт дня это сумма лучших результатов · за босса ×2';
   hide('start'); show('daily');
   renderDailyName();
+  renderDailySecs();
   renderDailyBoard();
 };
 $('dailyBackB').onclick = () => { hide('daily'); show('start'); };
-$('dailyGoB').onclick = () => {
-  if (NET.ready || SAVE.unlocked <= DAILY.sector || !pid()) return;
+function dailyGo(sec) {
+  if (NET.ready || !pid()) return;
   DAILY.prevSector = SAVE.sector;
   DAILY.prevSel = SAVE.sel;
   DAILY.on = true;
   DAILY.sent = false;
-  SAVE.sector = DAILY.sector;
+  DAILY.sector = sec;
+  SAVE.sector = sec;
   SAVE.sel = DAILY.charId;
-  NET.mseed = DAILY.seed;
+  NET.mseed = dailySeed(sec);
   hide('daily');
   startRun();
   SAVE.sel = DAILY.prevSel;
-};
+}
 function dailyExit() {
   if (!DAILY.on) return;
   DAILY.on = false;
@@ -4994,7 +5032,11 @@ async function dailySubmit(win) {
     const r = await (await fetch(API + '/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: id.token, day: DAILY.day, score, time: Math.round(time), kills, win: win ? 1 : 0, sector: DAILY.sector }) })).json();
     if (r.err) put('☀ испытание: ' + r.err);
-    else put('☀ ИСПЫТАНИЕ: ' + score + ' ⚙ — место ' + r.rank + ' из ' + r.total + (r.best > score ? ' · твой лучший сегодня: ' + r.best : ''));
+    else {
+      dailyBestSet(DAILY.sector, r.secBest);
+      put('☀ СЕКТОР ' + SECTORS[DAILY.sector].n.slice(-2) + ': ' + score + ' ⚙ · сумма дня ' + r.sum +
+        ' (' + r.parts.join('/') + ') — место ' + r.rank + ' из ' + r.total);
+    }
   } catch (e) { put('☀ испытание: эфир молчит, результат не передан'); }
 }
 $('coopB').onclick = () => {
