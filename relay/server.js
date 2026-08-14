@@ -27,9 +27,13 @@ const utcDay = () => {
 };
 const clean = s => String(s || '').replace(/[<>&"'\\]/g, '').trim().slice(0, 16);
 function board(day) {
-  const rows = Object.entries((DB.days[day] || {})).map(([tok, r]) => ({
-    name: DB.names[tok] || '???', score: r.s, time: r.t, kills: r.k, win: r.w, sector: r.sec
-  }));
+  const rows = Object.entries((DB.days[day] || {})).map(([tok, r]) => {
+    const secs = r.secs || {};
+    const parts = [0, 1, 2].map(i => (secs[i] && secs[i].s) | 0);
+    return { name: DB.names[tok] || '???', score: parts[0] + parts[1] + parts[2], parts,
+      wins: [0, 1, 2].filter(i => secs[i] && secs[i].w).length,
+      time: [0, 1, 2].reduce((a, i) => a + ((secs[i] && secs[i].t) | 0), 0) };
+  });
   rows.sort((a, b) => b.score - a.score);
   return rows;
 }
@@ -62,18 +66,22 @@ function api(req, res, body) {
     if (!DB.names[token]) { send(403, { err: 'нет позывного' }); return; }
     const day = m.day | 0, today = utcDay();
     if (day !== today) { send(400, { err: 'этот день закрыт' }); return; }
-    const score = m.score | 0, tm = m.time | 0, kills = m.kills | 0;
-    if (score < 0 || score > 500000 || tm < 5 || tm > 5400 || kills < 0 || kills > 30000 ||
+    const score = m.score | 0, tm = m.time | 0, kills = m.kills | 0, sec = m.sector | 0;
+    if (sec < 0 || sec > 2 || score < 0 || score > 500000 || tm < 5 || tm > 5400 || kills < 0 || kills > 30000 ||
       score > kills * 40 + tm * 30 + 3000) { send(400, { err: 'результат не принят' }); return; }
     if (!DB.days[day]) DB.days[day] = {};
-    const prev = DB.days[day][token];
-    if (!prev || score > prev.s) {
-      DB.days[day][token] = { s: score, t: tm, k: kills, w: m.win ? 1 : 0, sec: (m.sector | 0), at: Date.now() };
+    if (!DB.days[day][token]) DB.days[day][token] = { secs: {} };
+    const e = DB.days[day][token];
+    if (!e.secs) e.secs = {};
+    if (!e.secs[sec] || score > e.secs[sec].s) {
+      e.secs[sec] = { s: score, t: tm, k: kills, w: m.win ? 1 : 0, at: Date.now() };
       saveDB();
     }
+    const myName = DB.names[token];
     const rows = board(day);
-    const rank = rows.findIndex(r => r.name === DB.names[token] && r.score === Math.max(score, prev ? prev.s : 0)) + 1;
-    send(200, { rank: rank || rows.length, total: rows.length, best: DB.days[day][token].s });
+    const rank = rows.findIndex(r => r.name === myName) + 1;
+    const mine = rows[rank - 1] || { score: 0, parts: [0, 0, 0] };
+    send(200, { rank: rank || rows.length, total: rows.length, secBest: e.secs[sec].s, sum: mine.score, parts: mine.parts });
     return;
   }
   if (url.pathname === '/api/board') {
