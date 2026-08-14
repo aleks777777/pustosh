@@ -65,7 +65,9 @@ function api(req, res, body) {
     const token = String(m.token || '');
     if (!DB.names[token]) { send(403, { err: 'нет позывного' }); return; }
     const day = m.day | 0, today = utcDay();
-    if (day !== today) { send(400, { err: 'этот день закрыт' }); return; }
+    const yd = new Date(Date.now() - 86400000);
+    const yesterday = yd.getUTCFullYear() * 10000 + (yd.getUTCMonth() + 1) * 100 + yd.getUTCDate();
+    if (day !== today && day !== yesterday) { send(400, { err: 'этот день закрыт' }); return; }
     const score = m.score | 0, tm = m.time | 0, kills = m.kills | 0, sec = m.sector | 0;
     if (sec < 0 || sec > 2 || score < 0 || score > 500000 || tm < 5 || tm > 5400 || kills < 0 || kills > 30000 ||
       score > kills * 40 + tm * 30 + 3000) { send(400, { err: 'результат не принят' }); return; }
