@@ -246,6 +246,8 @@ html,body{overscroll-behavior:none}
     <div class="sech" style="margin-top:14px">ГЛУБИНА ЗАРАЖЕНИЯ — вызов ради добычи</div>
     <div id="deepRow" class="supline"></div>
     <div id="deepInfo" class="metaline"></div>
+    <div class="sech" style="margin-top:14px">РЕЛИКВИЯ КУПОЛА — одна на вылазку</div>
+    <div id="relicRow" class="supline"></div>
     <button id="deployB" class="big">▶ В БОЙ</button>
     <div class="btnrow"><button id="briefBackB" class="ghost">НАЗАД</button></div>
   </div>
@@ -701,6 +703,19 @@ const DEEP = [
 const deepOn = () => (SAVE.deep || []).length > 0 && !NET.ready && !DAILY.on;
 const deepHas = id => deepOn() && SAVE.deep.indexOf(id) >= 0;
 const deepVal = () => (SAVE.deep || []).reduce((a, id) => a + ((DEEP.find(x => x.id === id) || {}).w || 0), 0);
+const RELICS = [
+  { id: 'det',   n: 'ДЕТОНАТОР',        d: 'кристаллы взрываются при подборе (25 урона вокруг)' },
+  { id: 'steel', n: 'ЖИВАЯ СТАЛЬ',      d: 'перезарядка −20% · но кристаллы только вплотную' },
+  { id: 'glass', n: 'СТЕКЛЯННЫЙ РЕЗАК', d: 'урон ×2 · максимум здоровья ×0.5' },
+  { id: 'storm', n: 'МАГНИТНАЯ БУРЯ',   d: 'магнит ×3 · но опыт с кристаллов −20%' },
+  { id: 'blood', n: 'КРОВАВЫЙ КОНТРАКТ', d: 'убийство лечит 1 здоровье · реген и аптечки мертвы' },
+  { id: 'heavy', n: 'ТЯЖЁЛЫЙ ШАГ',      d: 'скорость −25% · урон +40% и +30 макс здоровья' },
+  { id: 'echo',  n: 'ЭХО ПУСТОШИ',      d: 'получил урон — выброс 45 урона вокруг (раз в 3с)' },
+  { id: 'hoard', n: 'СБОРЩИК',          d: 'золотые на 30% чаще · и роняют вдвое больше скрапа' }
+];
+const RELIC = { chest: false, echoAt: -9 };
+const relicOn = () => !!SAVE.relicSel && !NET.ready && !DAILY.on;
+const relicIs = id => relicOn() && SAVE.relicSel === id;
 const GREED = { on: false, t: 0 };
 const greedM = () => 1 + 0.25 * (GREED.t / 60);
 const GREED_CYC = 60, GREED_WIN = 10;
@@ -2426,6 +2441,7 @@ function lvlUp() {
   openLevelUp();
 }
 function gainXP(v) {
+  if (relicIs('storm')) v *= 0.8;
   player.xp += v * player.xpM;
   if (state === 'play' && player.xp >= player.xpNext) lvlUp();
 }
@@ -2906,7 +2922,7 @@ function spawner(dt) {
   if (!bossActive) {
     eliteTimer -= dt;
     if (eliteTimer <= 0) {
-      eliteTimer = 42;
+      eliteTimer = relicIs('hoard') ? 29 : 42;
       spawn('elite');
       if (deepHas('twin')) spawn('elite');
       announce(deepHas('twin') ? '⚠ ДВА ЗОЛОТЫХ МУТАНТА' : '⚠ ЗОЛОТОЙ МУТАНТ');
@@ -2916,6 +2932,7 @@ function spawner(dt) {
   }
 }
 function killEnemy(e, i) {
+  if (relicIs('blood') && e.t !== 'node') player.hp = Math.min(player.maxHp, player.hp + 1);
   if (e.t === 'node') { enemies.splice(i, 1); mazeNodeDown(e); return; }
   enemies.splice(i, 1);
   kills++;
@@ -2950,7 +2967,12 @@ function killEnemy(e, i) {
   }
   if (e.t === 'elite') {
     SAVE.stats.elites++;
-    addScrap(8);
+    addScrap(relicIs('hoard') ? 16 : 8);
+    if (!RELIC.chest && !NET.ready && RELICS.some(r2 => (SAVE.relics || []).indexOf(r2.id) < 0)) {
+      RELIC.chest = true;
+      pickups.push({ x: e.x + rnd(-18, 18), y: e.y + rnd(-18, 18), k: 'chest', ph: rnd(TAU) });
+      announce('◆ СУНДУК КУПОЛА');
+    }
     dropPickup(e.x, e.y);
     const list = SAVE.sector === 2 ? LOGS3 : SAVE.sector === 1 ? LOGS2 : LOGS;
     const cnt = SAVE.sector === 2 ? (SAVE.logs3 || 0) : SAVE.sector === 1 ? SAVE.logs2 : SAVE.logs;
@@ -3010,6 +3032,15 @@ function hitEnemy(e, base, colNorm) {
 function damagePlayer(d) {
   if (player.down) return;
   if (deepHas('wrath')) d *= 1.3;
+  if (relicIs('echo') && time - RELIC.echoAt > 3) {
+    RELIC.echoAt = time;
+    addRing(player.x, player.y, 140, '#c77bf0', 0.35, 5);
+    burst(player.x, player.y, '#c77bf0', 12);
+    for (const e2 of enemies) {
+      if (e2.t === 'boss') continue;
+      if (d2(e2.x, e2.y, player.x, player.y) < 140 * 140) { e2.hp -= 45 * player.dmgM; e2.hitT = 0.1; }
+    }
+  }
   if (state !== 'play' || DEV.god) return;
   d = Math.max(1, d - player.armor);
   player.hp -= d;
@@ -3454,7 +3485,7 @@ function update(dt) {
   }
   player.mov = ml > 0.05;
   if (player.mov) player.wt += dt;
-  player.hp = Math.min(player.maxHp, player.hp + player.regen * dt);
+  if (!relicIs('blood')) player.hp = Math.min(player.maxHp, player.hp + player.regen * dt);
   player.hurtT = Math.max(0, player.hurtT - dt);
   cutFxT -= dt;
   collideRocks(player, true, 55, dt);
@@ -3756,6 +3787,13 @@ function update(dt) {
     if (d < 13 + 9) {
       gems.splice(i, 1);
       if (tgt === player) gainXP(g.v); else allyGainXP(g.v);
+      if (relicIs('det')) {
+        burst(g.x, g.y, '#e0b23a', 6);
+        for (const e2 of enemies) {
+          if (e2.t === 'boss') continue;
+          if (d2(e2.x, e2.y, g.x, g.y) < 70 * 70) { e2.hp -= 25 * player.dmgM; e2.hitT = 0.08; }
+        }
+      }
       SFX.gem();
     }
   }
@@ -3768,10 +3806,24 @@ function update(dt) {
     else if (coopA && d2(p.x, p.y, coopA.x, coopA.y) < 28 * 28) who = coopA;
     if (who) {
       pickups.splice(i, 1);
-      if (p.k === 'heal') {
-        SFX.pick();
-        who.hp = Math.min(who.maxHp, who.hp + 30);
-        dmgText(who.x, who.y - 14, '+30', '#7fe08a');
+      if (p.k === 'chest') {
+        SFX.evolve();
+        const left = RELICS.filter(r2 => (SAVE.relics || []).indexOf(r2.id) < 0);
+        if (left.length) {
+          const r3 = left[irnd(0, left.length - 1)];
+          if (!SAVE.relics) SAVE.relics = [];
+          SAVE.relics.push(r3.id);
+          announce('✦ РЕЛИКВИЯ КУПОЛА: ' + r3.n);
+          radioSay('Сундук довоенный. Внутри — ' + r3.n.toLowerCase() + '. ' + r3.d + '. Возьмёшь в СБОРАХ.', true);
+        } else addScrap(40);
+      } else if (p.k === 'heal') {
+        if (relicIs('blood') && who === player) {
+          dmgText(who.x, who.y - 14, 'КОНТРАКТ', '#d4453a');
+        } else {
+          SFX.pick();
+          who.hp = Math.min(who.maxHp, who.hp + 30);
+          dmgText(who.x, who.y - 14, '+30', '#7fe08a');
+        }
       } else if (p.k === 'magnet') {
         SFX.pick();
         gems.forEach(g => g.pull = true);
@@ -4085,7 +4137,16 @@ function draw() {
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.beginPath(); ctx.arc(p.x, by, 12, 0, TAU); ctx.fill();
     ctx.lineWidth = 2;
-    if (p.k === 'heal') {
+    if (p.k === 'chest') {
+      ctx.strokeStyle = '#c77bf0';
+      ctx.beginPath(); ctx.arc(p.x, by, 12, 0, TAU); ctx.stroke();
+      ctx.fillStyle = '#c77bf0';
+      ctx.fillRect(p.x - 7, by - 4, 14, 9);
+      ctx.fillStyle = '#0c0a07';
+      ctx.fillRect(p.x - 7, by - 1, 14, 2);
+      ctx.fillStyle = '#e8dcc4';
+      ctx.fillRect(p.x - 1.5, by - 2, 3, 4);
+    } else if (p.k === 'heal') {
       ctx.strokeStyle = '#d4453a';
       ctx.beginPath(); ctx.arc(p.x, by, 12, 0, TAU); ctx.stroke();
       ctx.fillStyle = '#d4453a';
@@ -4693,9 +4754,36 @@ function renderDeep() {
     ? 'глубина ' + v + ' · добыча +' + Math.round(v * 15) + '%' + (SAVE.deepBest ? ' · рекорд победы: ' + SAVE.deepBest : '')
     : 'без глубины · включай испытания — каждая даёт +15% к добыче' + (SAVE.deepBest ? ' · рекорд победы: ' + SAVE.deepBest : '');
 }
+function renderRelics() {
+  const row = $('relicRow');
+  row.innerHTML = '';
+  const owned = SAVE.relics || [];
+  if (!owned.length) {
+    row.innerHTML = '<span class="metaline">пока ни одной — сундуки роняют золотые мутанты</span>';
+    return;
+  }
+  const mk2 = (id, n2, d3) => {
+    const on = SAVE.relicSel === id;
+    const b = document.createElement('button');
+    b.className = 'ghost';
+    b.style.cssText = 'font-size:9px;padding:7px 9px' + (on ? ';border-color:#c77bf0;color:#c77bf0' : '');
+    b.textContent = (on ? '◆ ' : '◇ ') + n2;
+    b.title = d3;
+    b.onclick = () => { SAVE.relicSel = on ? '' : id; renderRelics(); };
+    row.appendChild(b);
+  };
+  RELICS.forEach(r2 => { if (owned.indexOf(r2.id) >= 0) mk2(r2.id, r2.n, r2.d); });
+  const info = document.createElement('div');
+  info.className = 'metaline';
+  info.style.width = '100%';
+  const sel = RELICS.find(r2 => r2.id === SAVE.relicSel);
+  info.textContent = sel ? sel.d : 'собрано ' + owned.length + ' из ' + RELICS.length + ' · выбери или иди налегке';
+  row.appendChild(info);
+}
 function renderBrief() {
   if (SAVE.sector >= SAVE.unlocked) SAVE.sector = 0;
   renderDeep();
+  renderRelics();
   $('briefScrap').textContent = '⚙ ' + SAVE.scrap + '  ·  👥 ' + (9 + SAVE.pop) + '  ·  рекорд ' + fmt(SAVE.best);
   const sb = $('sectors'); sb.innerHTML = '';
   SECTORS.forEach((s, i) => {
@@ -4980,6 +5068,12 @@ function startRun() {
   state = 'play';
   GREED.on = false;
   GREED.t = 0;
+  RELIC.chest = false;
+  RELIC.echoAt = -9;
+  if (relicIs('glass')) { player.dmgM *= 2; player.maxHp = Math.ceil(player.maxHp * 0.5); player.hp = Math.min(player.hp, player.maxHp); }
+  if (relicIs('heavy')) { player.spd *= 0.75; player.dmgM *= 1.4; player.maxHp += 30; player.hp += 30; }
+  if (relicIs('steel')) { player.cdr *= 0.8; player.magnet = 16; }
+  if (relicIs('storm')) { player.magnet *= 3; }
   $('greedHud').style.display = 'none';
   $('evacB').style.display = 'none';
   $('dailyRank1').textContent = '';
@@ -5319,6 +5413,8 @@ DEV.bossKind = () => { const b = enemies.find(e => e.t === 'boss'); return b ? b
 DEV.spikes = () => mzSpikes.length;
 DEV.setSeed = v => { NET.mseed = v; };
 DEV.deep = a => { SAVE.deep = a; };
+DEV.relic = id => { SAVE.relics = id ? [id] : []; SAVE.relicSel = id || ''; };
+DEV.pstat = () => ({ hp: Math.round(player.hp), mhp: Math.round(player.maxHp), dm: player.dmgM, spd: Math.round(player.spd), mag: Math.round(player.magnet) });
 DEV.state = () => state;
 DEV.greed = () => ({ on: GREED.on, t: GREED.t, m: Math.round(greedM() * 100) / 100 });
 DEV.runScrap = () => Math.round(runScrap);
