@@ -217,6 +217,7 @@ html,body{overscroll-behavior:none}
     <div class="metaline" id="metaline"></div>
     <button id="startB" class="big">▶ НА ВЫЛАЗКУ</button>
     <button id="coopB" class="ghost" style="margin-top:10px">⇆ ИГРАТЬ ВДВОЁМ</button>
+    <button id="dailyB" class="ghost" style="margin-top:10px">☀ ИСПЫТАНИЕ ДНЯ</button>
     <div class="btnrow">
       <button id="shopOpenB" class="ghost">⚙ СХРОН</button>
       <button id="codexOpenB" class="ghost icobtn" title="Журнал">✎</button>
@@ -269,6 +270,18 @@ html,body{overscroll-behavior:none}
 </div>
 
 <!-- КООП -->
+<div id="daily" class="ov hidden">
+  <div class="panel">
+      <div class="eyebrow">одна пустошь на всех · без прокачки Схрона · счёт — добытый скрап</div>
+      <h2>ИСПЫТАНИЕ ДНЯ</h2>
+      <div id="dailyInfo" class="metaline" style="margin-bottom:10px"></div>
+      <div id="dailyName" style="margin-bottom:12px"></div>
+      <button id="dailyGoB" class="big" style="display:none">▶ ПРИНЯТЬ ИСПЫТАНИЕ</button>
+      <div class="sech">ТОП ДНЯ</div>
+      <div id="dailyBoard" class="metaline" style="min-height:60px">…</div>
+    <button id="dailyBackB" class="ghost" style="margin-top:14px">НАЗАД</button>
+  </div>
+</div>
 <div id="coop" class="ov hidden">
   <div class="panel">
     <div class="eyebrow">вылазка вдвоём · сектор выбирает создатель комнаты</div>
@@ -364,6 +377,7 @@ html,body{overscroll-behavior:none}
     <div id="stats"></div>
     <div class="btnrow">
       <button id="againB" class="big" style="margin-top:0">ЕЩЁ РАЗ</button>
+      <div id="dailyRank1" class="metaline" style="margin-bottom:8px"></div>
       <button id="toBaseB" class="ghost">В СХРОН</button>
     </div>
   </div>
@@ -377,6 +391,7 @@ html,body{overscroll-behavior:none}
     <div class="story" id="epiText"></div>
     <div id="vstats"></div>
     <div class="btnrow">
+      <div id="dailyRank2" class="metaline" style="margin-bottom:8px"></div>
       <button id="vAgainB" class="big" style="margin-top:0;display:none">ЕЩЁ РАЗ</button>
       <button id="vBaseB" class="big" style="margin-top:0">В СХРОН</button>
     </div>
@@ -657,11 +672,26 @@ function radioOnce(key, msg, urgent) {
 
 /* ================= КООП: бессерверный P2P (WebRTC + мини-MQTT сигналинг) ================= */
 const GAMEVER = 9;
+const DAILY = { on: false, day: 0, seed: 0, sector: 0, charId: 'rez', prevSector: 0, prevSel: '', sent: false };
+function dayNum() {
+  const d = new Date();
+  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+}
+function dailyCalc() {
+  DAILY.day = dayNum();
+  DAILY.seed = ((DAILY.day * 2654435761) ^ 0x9e3779b9) & 2147483647;
+  DAILY.sector = DAILY.day % 3;
+  DAILY.charId = ['rez', 'him', 'smo'][(DAILY.day >> 2) % 3];
+}
+function pid() {
+  try { return JSON.parse(localStorage.getItem('pustosh-id') || 'null'); } catch (e) { return null; }
+}
 const RELAY_URL = 'wss://pustosh-production.up.railway.app';
 function relayURL() {
   try { const o = localStorage.getItem('pustosh-relay'); if (o) return o; } catch (e) {}
   return RELAY_URL;
 }
+const API = RELAY_URL.replace('wss://', 'https://').replace('ws://', 'http://');
 const NET = { role: null, ready: false, pc: null, dcR: null, dcU: null, code: '',
   ping: 0, ally: null, eid: 1, gEn: {}, sendT: 0, pingT: 0, lastHp: 999,
   wp2: {}, g2lvl: {}, gp: 0, pend: 0, allyAuraR: 0 };
@@ -1960,7 +1990,7 @@ const SUPPLIES = [
   { id: 'rer',   n: 'ПЕРЕСДАЧА', d: '+1 пересдача карт на эту вылазку', cost: 20 },
   { id: 'ammo',  n: 'ПАТРОНЫ', d: '+10% урона на эту вылазку',   cost: 30 }
 ];
-const mlvl = id => SAVE.meta[id] || 0;
+const mlvl = id => DAILY.on ? 0 : (SAVE.meta[id] || 0);
 const mcost = m => {
   const lv = mlvl(m.id);
   if (lv < m.max) return m.base * (lv + 1);
@@ -2969,6 +2999,7 @@ function endRunCommon() {
   return gained;
 }
 function gameOver() {
+  if (DAILY.on) { dailySubmit(false); DAILY.sent = true; }
   state = 'over';
   if (player.hp <= 0) gibSprite('player', 0, player.x, player.y, player.r, true);
   const gained = endRunCommon();
@@ -2985,6 +3016,7 @@ function gameOver() {
   SFX.die();
 }
 function victory() {
+  if (DAILY.on) { DAILY.sent = false; dailySubmit(true); }
   state = 'victory';
   addScrap(200);
   SAVE.wins++;
@@ -4832,6 +4864,9 @@ function startRun() {
   mzSpikes.length = 0;
   if (SEC().maze) mazeGen();
   state = 'play';
+  $('dailyRank1').textContent = '';
+  $('dailyRank2').textContent = '';
+  DAILY.sent = false;
   player.down = false;
   NET.revT = 0;
   MUS.setSector();
@@ -4876,9 +4911,94 @@ $('deployB').onclick = () => startRun();
 $('briefBackB').onclick = () => { state = 'menu'; renderMenu(); hide('brief'); show('start'); };
 $('againB').onclick = () => {
   if (NET.ready && NET.role === 'host') { coopLaunch(); return; }
+  if (DAILY.on) { NET.mseed = DAILY.seed; const k2 = SAVE.sel; SAVE.sel = DAILY.charId; startRun(); SAVE.sel = k2; return; }
   startRun();
 };
+function fmtT(t) { return Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0'); }
+function renderDailyName() {
+  const box = $('dailyName');
+  const id = pid();
+  if (id && id.name) {
+    box.innerHTML = 'позывной: <b style="color:var(--acid)">' + id.name + '</b> <button id="dailyRenB" class="ghost" style="font-size:9px;padding:5px 8px">сменить</button>';
+    $('dailyRenB').onclick = () => { try { localStorage.removeItem('pustosh-id'); } catch (e) {} renderDailyName(); };
+    $('dailyGoB').style.display = SAVE.unlocked > DAILY.sector ? '' : 'none';
+  } else {
+    box.innerHTML = '<input id="dailyNameIn" class="netin" maxlength="16" placeholder="ТВОЙ ПОЗЫВНОЙ" style="width:180px"> <button id="dailySaveB" class="ghost">В ЭФИР</button>';
+    $('dailyGoB').style.display = 'none';
+    $('dailySaveB').onclick = async () => {
+      const nm = $('dailyNameIn').value.trim();
+      if (nm.length < 2) return;
+      try {
+        const r = await fetch(API + '/api/hello', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: nm, token: (pid() || {}).token }) });
+        const d = await r.json();
+        if (d.token) { localStorage.setItem('pustosh-id', JSON.stringify(d)); renderDailyName(); }
+      } catch (e) { $('dailyBoard').textContent = 'нет связи со Схроном — проверь интернет'; }
+    };
+  }
+}
+async function renderDailyBoard() {
+  $('dailyBoard').textContent = 'слушаю эфир…';
+  try {
+    const d = await (await fetch(API + '/api/board?day=' + DAILY.day)).json();
+    if (!d.rows || !d.rows.length) { $('dailyBoard').textContent = 'сегодня в эфире пусто — будь первым'; return; }
+    const me = (pid() || {}).name;
+    $('dailyBoard').innerHTML = d.rows.map((r, i) =>
+      '<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0' +
+      (r.name === me ? ';color:var(--acid)' : '') + '">' +
+      '<span>' + (i + 1) + '. ' + r.name + (r.win ? ' ✦' : '') + '</span>' +
+      '<span>' + r.score + ' ⚙ · ' + fmtT(r.time) + '</span></div>').join('') +
+      '<div style="margin-top:6px;opacity:.6">всего в топе: ' + d.total + '</div>';
+  } catch (e) { $('dailyBoard').textContent = 'эфир молчит — проверь интернет'; }
+}
+$('dailyB').onclick = () => {
+  if (NET.ready) return;
+  dailyCalc();
+  const S2 = SECTORS[DAILY.sector], C2 = CHARS.find(c => c.id === DAILY.charId) || CHARS[0];
+  $('dailyInfo').innerHTML = 'сегодня: <b>' + S2.n + ' · ' + S2.sub + '</b> · боец дня: <b>' + C2.n + '</b>' +
+    (SAVE.unlocked > DAILY.sector ? '' : '<br><span style="color:var(--warn,#e0b23a)">сектор ещё заперт — открой его в обычных вылазках</span>') +
+    '<br>прокачка Схрона выключена · боец дня выдан всем · счёт = скрап, ×2 за босса';
+  hide('start'); show('daily');
+  renderDailyName();
+  renderDailyBoard();
+};
+$('dailyBackB').onclick = () => { hide('daily'); show('start'); };
+$('dailyGoB').onclick = () => {
+  if (NET.ready || SAVE.unlocked <= DAILY.sector || !pid()) return;
+  DAILY.prevSector = SAVE.sector;
+  DAILY.prevSel = SAVE.sel;
+  DAILY.on = true;
+  DAILY.sent = false;
+  SAVE.sector = DAILY.sector;
+  SAVE.sel = DAILY.charId;
+  NET.mseed = DAILY.seed;
+  hide('daily');
+  startRun();
+  SAVE.sel = DAILY.prevSel;
+};
+function dailyExit() {
+  if (!DAILY.on) return;
+  DAILY.on = false;
+  SAVE.sector = DAILY.prevSector;
+}
+async function dailySubmit(win) {
+  if (!DAILY.on || DAILY.sent) return;
+  DAILY.sent = true;
+  const id = pid();
+  if (!id) return;
+  const score = Math.round(runScrap * (win ? 2 : 1));
+  const el1 = $('dailyRank1'), el2 = $('dailyRank2');
+  const put = t => { el1.textContent = t; el2.textContent = t; };
+  put('☀ испытание: передаю результат…');
+  try {
+    const r = await (await fetch(API + '/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: id.token, day: DAILY.day, score, time: Math.round(time), kills, win: win ? 1 : 0, sector: DAILY.sector }) })).json();
+    if (r.err) put('☀ испытание: ' + r.err);
+    else put('☀ ИСПЫТАНИЕ: ' + score + ' ⚙ — место ' + r.rank + ' из ' + r.total + (r.best > score ? ' · твой лучший сегодня: ' + r.best : ''));
+  } catch (e) { put('☀ испытание: эфир молчит, результат не передан'); }
+}
 $('coopB').onclick = () => {
+  dailyExit();
   audioInit();
   hide('start'); show('coop');
   $('coopPick').style.display = '';
@@ -4935,6 +5055,7 @@ function renderCoopSecs() {
   });
 }
 function coopLaunch() {
+  dailyExit();
   SAVE.sector = clamp(NET.secPick || 0, 0, SAVE.unlocked - 1);
   NET.mseed = (Math.random() * 2147483647) | 0;
   NET.ally = Object.assign(NET.ally || {}, { x: 70, y: 0, r: 13, hp: 100, maxHp: 100,
@@ -4955,9 +5076,9 @@ $('coopEndB').onclick = () => {
   renderMenu();
 };
 
-$('toBaseB').onclick = () => { if (NET.ready) netDrop(); toBase(); };
+$('toBaseB').onclick = () => { if (NET.ready) netDrop(); dailyExit(); toBase(); };
 $('vAgainB').onclick = () => { if (NET.ready && NET.role === 'host') coopLaunch(); };
-$('vBaseB').onclick = () => { if (NET.ready) netDrop(); toBase(); };
+$('vBaseB').onclick = () => { if (NET.ready) netDrop(); dailyExit(); toBase(); };
 $('resumeB').onclick = togglePause;
 $('giveupB').onclick = () => { hide('paused'); gameOver(); };
 const __de = document.documentElement;
